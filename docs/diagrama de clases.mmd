@@ -1,0 +1,63 @@
+classDiagram
+    class USER {
+        int id
+        string Name
+        string Email
+        string Password
+        string UserRole
+        boolean IsUserDeleted
+    }
+
+    class CLIENT {
+    }
+
+    class MEMBERSHIP {
+        int IdClient
+        string MembershipState
+        string MembershipType
+        float Price
+        date PaymentDate
+        date ExpirationDate
+    }
+
+    class PROFESSOR {
+        string Specialization
+    }
+
+    class ADMIN {
+    }
+
+    class PAYMENTS {
+        int IdPayment
+        int IdClient
+        float Price
+        date PaymentDate
+        string PaymentMethod
+        string PaymentState
+    }
+
+    class INSCRIPTIONS {
+        int ClientId
+        int ClassId
+        date ClassDate
+    }
+
+    class GYMCLASS {
+        int ClassId
+        string Name
+        string Description
+        int MaxCapacity
+        string Schedule
+    }
+
+    %% Relaciones de herencia
+    CLIENT -- USER
+    PROFESSOR -- USER
+    ADMIN -- USER
+
+    %% Relaciones de asociación
+    CLIENT 1 -- 1 MEMBERSHIP 
+    CLIENT 1 -- 0.. PAYMENTS 
+    CLIENT 1 -- 0.. INSCRIPTIONS 
+    GYMCLASS 1 -- 0.. INSCRIPTIONS 
+    PROFESSOR 1 -- 0.. GYMCLASS
