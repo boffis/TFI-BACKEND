@@ -1,17 +1,20 @@
-﻿namespace Domain.Entities
+﻿namespace GymManagement.Domain.Entities
 {
     public class GymClass
     {
-        public int Guid { get; set; }
+        public Guid GymClassId{ get; set; }
 
         public required string ClassName { get; set; }
 
-        public string ClassDescription { get; set; } = string.Empty;
+        public string? ClassDescription { get; set; }
 
         public required int MaxCapacity { get; set; }
 
-        public required string TrainerName { get; set; }
+        public Guid TrainerId { get; set; }
 
-        public required DateTime Schedule { get; set; }   
+        public required Trainer Trainer { get; set; }
+
+        public required DateTime Schedule { get; set; }
+
     }
 }

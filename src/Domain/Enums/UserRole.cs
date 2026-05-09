@@ -1,4 +1,4 @@
-﻿namespace Domain.Enums
+﻿namespace GymManagement.Domain.Enums
 {
     public enum UserRole
     {

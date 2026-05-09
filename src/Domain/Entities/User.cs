@@ -1,10 +1,9 @@
-﻿using Domain.Enums;
-using System.ComponentModel.DataAnnotations;
+﻿using GymManagement.Domain.Enums;
 
-namespace Domain.Entities
+namespace GymManagement.Domain.Entities
 {
     public class User
-    {     
+    {
         public Guid UserId { get; set; }
   
         public required string Name { get; set; }

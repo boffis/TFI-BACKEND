@@ -1,4 +1,4 @@
-﻿namespace Domain.Entities
+﻿namespace GymManagement.Domain.Entities
 {
     public class Inscription
     {

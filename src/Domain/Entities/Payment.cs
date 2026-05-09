@@ -1,10 +1,10 @@
-﻿namespace Domain.Entities
+﻿namespace GymManagement.Domain.Entities
 {
     public class Payment
     {
-        public Guid IdPayment { get; set; }
+        public Guid PaymentId { get; set; }
 
-        public Guid IdClient { get; set; }
+        public Guid ClientId { get; set; }
 
         public required Client Client { get; set; }
 

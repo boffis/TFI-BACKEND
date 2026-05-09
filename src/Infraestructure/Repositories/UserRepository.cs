@@ -1,8 +1,4 @@
-﻿using Domain.Entities;
-using Domain.Interfaces;
-
-
-namespace Infraestructure.Repositories
+﻿namespace GymManagement.Infrastructure.Repositories
 {
     public class UserRepository
     {

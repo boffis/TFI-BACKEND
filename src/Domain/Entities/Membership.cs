@@ -1,11 +1,12 @@
-﻿using Domain.Enums;
-using System.ComponentModel.DataAnnotations;
+﻿using GymManagement.Domain.Enums;
 
-namespace Domain.Entities
+namespace GymManagement.Domain.Entities
 {
     public class Membership
     {
-        public Guid IdClient { get; set; }
+        public Guid MembershipId { get; set; }
+
+        public Guid ClientId { get; set; }
     
         public required Client Client { get; set; }
 
