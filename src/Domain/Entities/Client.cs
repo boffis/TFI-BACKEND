@@ -2,8 +2,9 @@
 {
     public class Client : User
     {
-        public required Membership Membership { get; set; }
+        public Membership? Membership { get; set; }
 
+        public ICollection<Inscription> Inscriptions { get; set; } = new List<Inscription>();
     }
 }
     

@@ -2,7 +2,6 @@
 {
     public enum MembershipType
     {
-        Daily,
         Weekly,
         Monthly,
         Quarterly,

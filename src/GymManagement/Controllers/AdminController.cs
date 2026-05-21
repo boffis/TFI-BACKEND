@@ -30,17 +30,57 @@ namespace GymManagement.Presentation.Controllers
             if (user == null)
             {
                 return NotFound();
-            }
-            return Ok(user);
+            } return Ok(user);
+        }
+
+        [HttpGet("DeletedUsers/{UserId}")]
+        public IActionResult GetUserDeleted(Guid UserId)
+        {
+            var user = _adminService.GetUserDeleted(UserId);
+            if (user == null)
+            {
+                return NotFound();
+            } return Ok(user);
         }
 
         [HttpPost]
-
         public ActionResult<UserResponse> CreateUser([FromBody] UserRequest user)
         {
             var createdUser = _adminService.CreateUser(user);
             return CreatedAtAction(nameof(GetUserById), new { UserId = createdUser }, createdUser);
         }
-       
+
+        [HttpPut("Update/{UserId}")]
+        public IActionResult UpdateUser(Guid UserId, [FromBody] UserRequest userRequest)
+        {
+            var existingUser = _adminService.GetUserById(UserId);
+            if (existingUser != null)
+            {
+                _adminService.UpdateUser(UserId, userRequest);
+                return NoContent();
+            } else return NotFound();
+        }
+
+        [HttpDelete("Delete/{UserId}")]
+        public IActionResult DeleteUser(Guid UserId)
+        {
+            var existingUser = _adminService.GetUserById(UserId);
+            if (existingUser == null) 
+            {
+                _adminService.DeleteUser(UserId);
+                    return NoContent();
+            } else return NotFound();            
+        }
+
+        [HttpPost("Recover/{UserId}")]
+        public IActionResult RecoverUser(Guid UserId)
+        {
+            var existingUser = _adminService.GetUserDeleted(UserId);
+            if (existingUser != null)
+            {
+                _adminService.RecoverUser(UserId);
+                return NoContent();
+            } else return NotFound();
+        }
     }
 }

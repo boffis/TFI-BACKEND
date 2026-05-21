@@ -2,7 +2,7 @@
 
 namespace GymManagement.Domain.Entities
 {
-    public class User
+    public abstract class User
     {
         public Guid UserId { get; set; }
   

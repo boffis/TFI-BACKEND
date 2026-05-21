@@ -23,26 +23,48 @@ namespace GymManagement.Infrastructure.Persistence
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<Inscription>()
-            .HasKey(i => new { i.ClientId, i.GymClassId });
+            modelBuilder.Entity<Client>().ToTable("Clients");
+
+            modelBuilder.Entity<Trainer>().ToTable("Trainers");
+
+            modelBuilder.Entity<Admin>().ToTable("Admins");
 
             modelBuilder.Entity<Client>()
-            .HasOne(c => c.Membership)
-            .WithOne(m => m.Client)
-            .HasForeignKey<Membership>(m => m.ClientId);
+               .HasOne(c => c.Membership)
+               .WithOne(m => m.Client)
+               .HasForeignKey<Membership>(m => m.ClientId)
+               .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<GymClass>()
-            .HasOne(gc => gc.Trainer)
-            .WithMany(t => t.GymClasses)
-            .HasForeignKey(gc => gc.TrainerId);
+                .HasOne(gc => gc.Trainer)
+                .WithMany(t => t.GymClasses)
+                .HasForeignKey(gc => gc.TrainerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inscription>()
+                .HasKey(i => new { i.ClientId, i.GymClassId });
+
+            modelBuilder.Entity<Inscription>()
+                .HasOne(i => i.Client)
+                .WithMany(c => c.Inscriptions)
+                .HasForeignKey(i => i.ClientId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inscription>()
+                .HasOne(i => i.GymClass)
+                .WithMany(gc => gc.Inscriptions)
+                .HasForeignKey(i => i.GymClassId)
+                .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Payment>()
-            .Property(p => p.Price)
-            .HasPrecision(10, 2);
+                .HasOne(p => p.Membership)
+                .WithMany(m => m.Payments)
+                .HasForeignKey(p => p.MembershipId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<Membership>()
-            .Property(p => p.Price)
-            .HasPrecision(10, 2);
+            modelBuilder.Entity<Payment>()
+                .Property(p => p.Price)
+                .HasColumnType("decimal(10,2)");
 
         }
     }

@@ -1,7 +1,7 @@
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Services;
 using GymManagement.Infrastructure.Persistence;
-using Infraestructure.Repositories;
+using GymManagement.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +18,9 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 builder.Services.AddScoped<IAdminRepository, AdminRepository>();
 builder.Services.AddScoped<AdminService>();
+
+builder.Services.AddScoped<ITrainerRepository, TrainerRepository>();
+builder.Services.AddScoped<TrainerService>();
 
 
 var app = builder.Build();

@@ -14,10 +14,8 @@ namespace GymManagement.Domain.Entities
 
         public bool MembershipState { get; set; }
 
-        public required decimal Price { get; set; }
-
-        public DateTime PaymentDate { get; set; } 
-
         public DateTime ExpirationDate { get; set; }
+
+        public ICollection<Payment> Payments { get; set; } = new List<Payment>();
     }
 }

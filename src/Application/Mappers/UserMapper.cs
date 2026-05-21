@@ -15,22 +15,20 @@ namespace GymManagement.Application.Mappers
                 Name = user.Name,
                 Email = user.Email,
                 Password = user.Password,
-              
-
             };
         }
 
-            public static User ToUser(this UserRequest userRequest)
+        public static User ToUser(this UserRequest userRequest)
             {
-                return  new User
-                {
-                    UserId = Guid.NewGuid(),
-                    Name = userRequest.Name,
-                    Email = userRequest.Email,
-                    Password = userRequest.Password,
-                    UserRole = UserRole.Client,
-                    IsUserDeleted = false,
-                };
+             return  new Client
+             {
+                 UserId = Guid.NewGuid(),
+                 Name = userRequest.Name,
+                 Email = userRequest.Email,
+                 Password = userRequest.Password,
+                 UserRole = UserRole.Client,
+                 IsUserDeleted = false,
+             };
         }
     }
 }

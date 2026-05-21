@@ -19,7 +19,7 @@ namespace GymManagement.Infrastructure.Repositories
 
         public virtual List<T> GetAll()
         {
-            return _dbSet.Where(x => !x.IsUserDeleted).ToList();
+            return [.. _dbSet.Where(x => !x.IsUserDeleted)];
         }
 
         public virtual T? GetById(Guid id)
@@ -50,6 +50,17 @@ namespace GymManagement.Infrastructure.Repositories
                 _context.SaveChanges();
             }
 
+        }
+
+        public virtual void Recover(Guid id)
+        {
+            var entity = GetById(id);
+            if (entity != null)
+            {
+                entity.IsUserDeleted = false;
+                _dbSet.Update(entity);
+                _context.SaveChanges();
+            }
         }
     }
 }

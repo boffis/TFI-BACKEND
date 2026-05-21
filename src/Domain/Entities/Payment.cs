@@ -4,9 +4,9 @@
     {
         public Guid PaymentId { get; set; }
 
-        public Guid ClientId { get; set; }
+        public Guid MembershipId { get; set; }
 
-        public required Client Client { get; set; }
+        public required Membership Membership { get; set; }
 
         public decimal Price { get; set; }
 
