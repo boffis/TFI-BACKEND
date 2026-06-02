@@ -20,7 +20,7 @@ namespace GymManagement.Application.Mappers
 
         public static User ToUser(this UserRequest userRequest)
             {
-             return  new Client
+             return new Client
              {
                  UserId = Guid.NewGuid(),
                  Name = userRequest.Name,

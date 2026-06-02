@@ -7,4 +7,3 @@
         public ICollection<Inscription> Inscriptions { get; set; } = new List<Inscription>();
     }
 }
-    

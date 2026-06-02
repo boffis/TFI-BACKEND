@@ -13,13 +13,13 @@ namespace GymManagement.Infrastructure.Repositories
 
         }
 
-        public List<User> GetAllUsers()
+        public override List<User> GetAll()
         {
             return [.. _context.Users.Where(c => !c.IsUserDeleted)];
         }
 
-        public User GetUserById(Guid UserId)
-        {   
+        public override User GetById(Guid UserId)
+        {
             var user = _context.Users
                 .FirstOrDefault(c => c.UserId == UserId && !c.IsUserDeleted);
             return user ?? throw new InvalidOperationException("Usuario no encontrado");
@@ -32,34 +32,27 @@ namespace GymManagement.Infrastructure.Repositories
             return user ?? throw new InvalidOperationException("Usuario no encontrado");
         }
 
-        public override User Add(User user)
+        public override void Update(User user)
         {
-            _dbSet.Add(user);
+            _context.Users.Update(user);
             _context.SaveChanges();
-            return user;
         }
 
         public override void Delete(Guid UserId)
         {
-            var user = GetUserById(UserId) ?? 
+            var user = GetById(UserId) ??
                 throw new InvalidOperationException("Usuario no encontrado");
             user.IsUserDeleted = true;
             _dbSet.Update(user);
             _context.SaveChanges();
         }
 
-        public void RecoverUser(Guid UserId)
+        public override void Recover(Guid UserId)
         {
-            var user = GetUserDeleted(UserId) ?? 
+            var user = GetUserDeleted(UserId) ??
                 throw new InvalidOperationException("Usuario no encontrado");
             user.IsUserDeleted = false;
             _dbSet.Update(user);
-            _context.SaveChanges();
-        }
-
-        public override void Update(User user)
-        {
-            _context.Users.Update(user);
             _context.SaveChanges();
         }
     }

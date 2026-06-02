@@ -1,8 +1,5 @@
-﻿using Azure.Core;
-using GymManagement.Application.Interfaces;
-using GymManagement.Application.Mappers;
+﻿using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
-using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
 
 namespace GymManagement.Application.Services
@@ -18,12 +15,12 @@ namespace GymManagement.Application.Services
 
         public List<User> GetAllUsers()
         {
-            return _adminRepository.GetAllUsers();
+            return _adminRepository.GetAll();
         }
 
         public User GetUserById(Guid UserId)
         {
-            return _adminRepository.GetUserById(UserId);
+            return _adminRepository.GetById(UserId);
         }
 
         public User GetUserDeleted(Guid UserId)
@@ -31,18 +28,9 @@ namespace GymManagement.Application.Services
             return _adminRepository.GetUserDeleted(UserId);
         }
 
-        public UserResponse CreateUser(UserRequest user)
-        {
-            var newUser = user.ToUser();
-
-            _adminRepository.Add(newUser);
-
-            return newUser.ToUserResponse();
-        }
-
         public void UpdateUser(Guid UserId, UserRequest userRequest)
         {
-            var user =  _adminRepository.GetUserById(UserId);
+            var user =  _adminRepository.GetById(UserId);
             if (user == null) return;
             user.Name = userRequest.Name;
             user.Email = userRequest.Email;
@@ -57,7 +45,7 @@ namespace GymManagement.Application.Services
 
         public void RecoverUser(Guid UserId)
         {
-            _adminRepository.RecoverUser(UserId);
+            _adminRepository.Recover(UserId);
         }
     }
 }

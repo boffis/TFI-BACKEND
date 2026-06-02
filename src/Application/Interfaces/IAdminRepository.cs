@@ -4,19 +4,16 @@ namespace GymManagement.Application.Interfaces
 {
     public interface IAdminRepository
     {
-        List<User> GetAllUsers();
+        List<User> GetAll();
 
-        User GetUserById(Guid UserId);
+        User GetById(Guid UserId);
 
         User GetUserDeleted(Guid UserId);
-
-        User Add(User User);
 
         void Update(User User); 
 
         void Delete(Guid UserId);
 
-        void RecoverUser(Guid UserId);
+        void Recover(Guid UserId);
     }
 }
-    

@@ -17,6 +17,5 @@
         public required DateTime Schedule { get; set; }
 
         public ICollection<Inscription> Inscriptions { get; set; } = new List<Inscription>();
-
     }
 }

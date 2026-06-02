@@ -10,7 +10,6 @@ namespace GymManagement.Infrastructure.Repositories
         protected readonly ApplicationDbContext _context;
         protected readonly DbSet<T> _dbSet;
     
-
     public BaseRepository(ApplicationDbContext context)
         {
             _context = context;
@@ -49,7 +48,6 @@ namespace GymManagement.Infrastructure.Repositories
                 _dbSet.Update(entity);
                 _context.SaveChanges();
             }
-
         }
 
         public virtual void Recover(Guid id)

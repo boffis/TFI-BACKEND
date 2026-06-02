@@ -1,8 +1,4 @@
-﻿using GymManagement.Application.Requests;
-using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
-
-namespace GymManagement.Application.Responses
+﻿namespace GymManagement.Application.Responses
 {
     public class UserResponse
     {

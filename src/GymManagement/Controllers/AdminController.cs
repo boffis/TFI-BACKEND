@@ -1,11 +1,13 @@
 ﻿using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Application.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GymManagement.Presentation.Controllers
 {
     [Route("api/[controller]")]
+    [Authorize]
     [ApiController]
     public class AdminController : ControllerBase
     {
@@ -17,7 +19,7 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpGet("users")]
-        public ActionResult GetAllUsers()
+        public ActionResult GetAll()
         {
             var users = _adminService.GetAllUsers();
             return Ok(users);
@@ -41,13 +43,6 @@ namespace GymManagement.Presentation.Controllers
             {
                 return NotFound();
             } return Ok(user);
-        }
-
-        [HttpPost]
-        public ActionResult<UserResponse> CreateUser([FromBody] UserRequest user)
-        {
-            var createdUser = _adminService.CreateUser(user);
-            return CreatedAtAction(nameof(GetUserById), new { UserId = createdUser }, createdUser);
         }
 
         [HttpPut("Update/{UserId}")]
