@@ -8,10 +8,14 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using System.Security.Claims;
 using System.Text;
+using GymManagement.Presentation.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
@@ -42,14 +46,13 @@ builder.Services.AddScoped<IAdminRepository, AdminRepository>();
 builder.Services.AddScoped<AdminService>();
 
 builder.Services.AddScoped<ITrainerRepository, TrainerRepository>();
+builder.Services.AddScoped<IGymClassRepository, GymClassRepository>();
 builder.Services.AddScoped<TrainerService>();
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(Policies.OnlyAdmin, policy => policy.RequireClaim("role", "Admin"));
-    options.AddPolicy(Policies.OnlyTrainer, policy => policy.RequireClaim("role", "Trainer"));
-    options.AddPolicy(Policies.OnlyClient, policy => policy.RequireClaim("role", "Client"));
-});
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(Policies.OnlyAdmin, policy => policy.RequireClaim(ClaimTypes.Role, "Admin"))
+    .AddPolicy(Policies.OnlyTrainer, policy => policy.RequireClaim(ClaimTypes.Role, "Trainer"))
+    .AddPolicy(Policies.OnlyClient, policy => policy.RequireClaim(ClaimTypes.Role, "Client"));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -69,6 +72,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {

@@ -15,7 +15,7 @@ namespace GymManagement.Application.Mappers
                 Name = trainer.Name,
                 Email = trainer.Email,
                 Password = trainer.Password,
-                Specialization = trainer.Specialization
+                Specialization = trainer.Specialization!
             };
         }
 

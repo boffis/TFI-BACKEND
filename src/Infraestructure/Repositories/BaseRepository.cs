@@ -1,4 +1,4 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Infrastructure.Persistence;
 using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -52,7 +52,7 @@ namespace GymManagement.Infrastructure.Repositories
 
         public virtual void Recover(Guid id)
         {
-            var entity = GetById(id);
+            var entity = _dbSet.FirstOrDefault(x => x.UserId == id);
             if (entity != null)
             {
                 entity.IsUserDeleted = false;

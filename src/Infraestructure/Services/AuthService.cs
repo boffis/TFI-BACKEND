@@ -1,4 +1,4 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
@@ -23,91 +23,76 @@ namespace GymManagement.Infrastructure.Services
             _configuration = configuration;
         }
 
-        public AuthResponse? SignUp(SignUpRequest request)
+        public AuthResponse? SignUpClient(UserRequest request)
         {
-            bool usedEmail = _context.Clients.Any(c => c.Email == request.Email)
-                   || _context.Trainers.Any(t => t.Email == request.Email)
-                   || _context.Admins.Any(a => a.Email == request.Email);
-
-            if (usedEmail) return null;
+            if (_context.Users.Any(u => u.Email == request.Email)) return null;
 
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
             Guid newId = Guid.NewGuid();
-            string role;
 
-            switch (request.UserRole)
+            var client = new Client
             {
-                case UserRole.Admin:
-                    var admin = new Admin
-                    {
-                        UserId = newId,
-                        Name = request.Name,
-                        Email = request.Email,
-                        Password = hashedPassword,
-                        UserRole = UserRole.Admin
-                    };
-                    _context.Admins.Add(admin);
-                    role = "Admin";
-                    break;
-
-                case UserRole.Client:
-                    var client = new Client
-                    {
-                        UserId = newId,
-                        Name = request.Name,
-                        Email = request.Email,
-                        Password = hashedPassword,
-                        UserRole = UserRole.Client
-                    };
-                    _context.Clients.Add(client);
-                    role = "Client";
-                    break;
-
-                case UserRole.Trainer:
-                    var trainer = new Trainer
-                    {
-                        UserId = newId,
-                        Name = request.Name,
-                        Email = request.Email,
-                        Password = hashedPassword,
-                        UserRole = UserRole.Trainer,
-                        Specialization = request.Specialization
-                    };
-                    _context.Trainers.Add(trainer);
-                    role = "Trainer";
-                    break;
-
-                default:
-                    return null;
-            }
+                UserId = newId,
+                Name = request.Name,
+                Email = request.Email,
+                Password = hashedPassword,
+                UserRole = UserRole.Client
+            };
+            _context.Clients.Add(client);
             _context.SaveChanges();
 
-            return new AuthResponse
-            {
-                Token = GenerateToken(newId, request.Email, request.UserRole.ToString()),
-                Role = role,
-                UserId = newId,
-                Email = request.Email
-            };
+            return BuildAuthResponse(newId, request.Email, UserRole.Client.ToString());
         }
+
+        public AuthResponse? SignUpTrainer(TrainerRequest request)
+        {
+            if (_context.Users.Any(u => u.Email == request.Email)) return null;
+
+            string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            Guid newId = Guid.NewGuid();
+
+            var trainer = new Trainer
+            {
+                UserId = newId,
+                Name = request.Name,
+                Email = request.Email,
+                Password = hashedPassword,
+                UserRole = UserRole.Trainer,
+                Specialization = request.Specialization
+            };
+            _context.Trainers.Add(trainer);
+            _context.SaveChanges();
+
+            return BuildAuthResponse(newId, request.Email, UserRole.Trainer.ToString());
+        }
+
+        public AuthResponse? SignUpAdmin(UserRequest request)
+        {
+            if (_context.Users.Any(u => u.Email == request.Email)) return null;
+
+            string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            Guid newId = Guid.NewGuid();
+
+            var admin = new Admin
+            {
+                UserId = newId,
+                Name = request.Name,
+                Email = request.Email,
+                Password = hashedPassword,
+                UserRole = UserRole.Admin
+            };
+            _context.Admins.Add(admin);
+            _context.SaveChanges();
+
+            return BuildAuthResponse(newId, request.Email, UserRole.Admin.ToString());
+        }
+
         public AuthResponse? SignIn(SignInRequest request)
         {
-            var client = _context.Clients.FirstOrDefault(c => c.Email == request.Email);
-            if (client != null && BCrypt.Net.BCrypt.Verify(request.Password, client.Password))
+            var user = _context.Users.FirstOrDefault(u => u.Email == request.Email && !u.IsUserDeleted);
+            if (user != null && BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
             {
-                return BuildAuthResponse(client.UserId, client.Email, client.UserRole.ToString());
-            }
-
-            var trainer = _context.Trainers.FirstOrDefault(t => t.Email == request.Email);
-            if (trainer != null && BCrypt.Net.BCrypt.Verify(request.Password, trainer.Password))
-            {
-                return BuildAuthResponse(trainer.UserId, trainer.Email, trainer.UserRole.ToString());
-            }
-
-            var admin = _context.Admins.FirstOrDefault(a => a.Email == request.Email);
-            if (admin != null && BCrypt.Net.BCrypt.Verify(request.Password, admin.Password))
-            {
-                return BuildAuthResponse(admin.UserId, admin.Email, admin.UserRole.ToString());
+                return BuildAuthResponse(user.UserId, user.Email, user.UserRole.ToString());
             }
 
             return null;

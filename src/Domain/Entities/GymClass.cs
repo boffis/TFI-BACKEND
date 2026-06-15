@@ -1,4 +1,4 @@
-﻿namespace GymManagement.Domain.Entities
+namespace GymManagement.Domain.Entities
 {
     public class GymClass
     {
@@ -15,6 +15,8 @@
         public required Trainer Trainer { get; set; }
 
         public required DateTime Schedule { get; set; }
+
+        public bool IsClassDeleted { get; set; } = false;
 
         public ICollection<Inscription> Inscriptions { get; set; } = new List<Inscription>();
     }

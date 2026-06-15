@@ -1,13 +1,13 @@
-﻿using GymManagement.Application.Requests;
-using GymManagement.Application.Responses;
+using GymManagement.Application.Requests;
 using GymManagement.Application.Services;
+using GymManagement.Presentation.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GymManagement.Presentation.Controllers
 {
-    [Route("api/[controller]")]
-    [Authorize]
+    [Route("[controller]")]
+    [Authorize(Policy = Policies.OnlyAdmin)]
     [ApiController]
     public class AdminController : ControllerBase
     {
@@ -18,7 +18,7 @@ namespace GymManagement.Presentation.Controllers
             _adminService = adminService;
         }
 
-        [HttpGet("users")]
+        [HttpGet("Users")]
         public ActionResult GetAll()
         {
             var users = _adminService.GetAllUsers();
@@ -48,34 +48,22 @@ namespace GymManagement.Presentation.Controllers
         [HttpPut("Update/{UserId}")]
         public IActionResult UpdateUser(Guid UserId, [FromBody] UserRequest userRequest)
         {
-            var existingUser = _adminService.GetUserById(UserId);
-            if (existingUser != null)
-            {
-                _adminService.UpdateUser(UserId, userRequest);
-                return NoContent();
-            } else return NotFound();
+            var success = _adminService.UpdateUser(UserId, userRequest);
+            return success ? NoContent() : NotFound();
         }
 
         [HttpDelete("Delete/{UserId}")]
         public IActionResult DeleteUser(Guid UserId)
         {
-            var existingUser = _adminService.GetUserById(UserId);
-            if (existingUser == null) 
-            {
-                _adminService.DeleteUser(UserId);
-                    return NoContent();
-            } else return NotFound();            
+            var success = _adminService.DeleteUser(UserId);
+            return success ? NoContent() : NotFound();
         }
 
         [HttpPost("Recover/{UserId}")]
         public IActionResult RecoverUser(Guid UserId)
         {
-            var existingUser = _adminService.GetUserDeleted(UserId);
-            if (existingUser != null)
-            {
-                _adminService.RecoverUser(UserId);
-                return NoContent();
-            } else return NotFound();
+            var success = _adminService.RecoverUser(UserId);
+            return success ? NoContent() : NotFound();
         }
     }
 }

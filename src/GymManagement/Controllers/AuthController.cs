@@ -1,13 +1,12 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
-using GymManagement.Application.Responses;
 using GymManagement.Presentation.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GymManagement.Presentation.Controllers
 {
-    [Route("api/auth")]
+    [Route("[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
@@ -20,12 +19,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpPost("SignUp")]
         [AllowAnonymous]
-        public IActionResult SignUp([FromBody] SignUpRequest request)
+        public IActionResult SignUp([FromBody] UserRequest request)
         {
-            if (request.UserRole != Domain.Enums.UserRole.Client)
-                return BadRequest("Solo se permite registrar clientes desde este endpoint.");
-
-            var response = _authService.SignUp(request);
+            var response = _authService.SignUpClient(request);
             if (response == null)
                 return BadRequest("El email ya está en uso.");
 
@@ -45,12 +41,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpPost("CreateTrainer")]
         [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult CreateTrainer([FromBody] SignUpRequest request)
+        public IActionResult CreateTrainer([FromBody] TrainerRequest request)
         {
-            if (request.UserRole != Domain.Enums.UserRole.Trainer)
-                return BadRequest("Este endpoint solo crea trainers.");
-
-            var response = _authService.SignUp(request);
+            var response = _authService.SignUpTrainer(request);
             if (response == null)
                 return BadRequest("El email ya está en uso.");
 
@@ -59,12 +52,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpPost("CreateAdmin")]
         [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult CreateAdmin([FromBody] SignUpRequest request)
+        public IActionResult CreateAdmin([FromBody] UserRequest request)
         {
-            if (request.UserRole != Domain.Enums.UserRole.Admin)
-                return BadRequest("Este endpoint solo crea admins.");
-
-            var response = _authService.SignUp(request);
+            var response = _authService.SignUpAdmin(request);
             if (response == null)
                 return BadRequest("El email ya está en uso.");
 

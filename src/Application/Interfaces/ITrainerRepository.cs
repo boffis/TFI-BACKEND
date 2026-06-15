@@ -2,11 +2,7 @@
 
 namespace GymManagement.Application.Interfaces
 {
-    public interface ITrainerRepository
+    public interface ITrainerRepository : IBaseRepository<Trainer>
     {
-        List<Trainer> GetAll();
-
-        Trainer GetById(Guid UserId);
-
     }
 }
