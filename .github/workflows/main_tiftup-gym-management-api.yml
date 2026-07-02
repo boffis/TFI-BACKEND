@@ -23,8 +23,11 @@ jobs:
         with:
           dotnet-version: '10.x'
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
+      - name: Restore dependencies
+        run: dotnet restore ../../GymManagement.API/GymManagement.API.csproj
+
+      - name: Build application
+        run: dotnet build ../../GymManagement.API/GymManagement.API.csproj --configuration ${{ env.BUILD_CONFIGURATION }} --no-restore
 
       - name: dotnet publish
         run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
