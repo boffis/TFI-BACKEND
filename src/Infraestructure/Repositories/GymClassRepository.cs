@@ -8,72 +8,75 @@ namespace GymManagement.Infrastructure.Repositories
     public class GymClassRepository : IGymClassRepository
     {
         private readonly ApplicationDbContext _context;
+        private readonly DbSet<GymClass> _dbSet;
 
         public GymClassRepository(ApplicationDbContext context)
         {
             _context = context;
+            _dbSet = context.GymClasses;
         }
 
         public List<GymClass> GetAll()
         {
-            return [.. _context.GymClasses.Where(gc => !gc.IsClassDeleted)];
+            return [.. _dbSet.Where(gc => !gc.IsClassDeleted)];
         }
 
         public GymClass? GetById(Guid id)
         {
-            return _context.GymClasses
+            return _dbSet
                 .Include(gc => gc.Trainer)
                 .FirstOrDefault(gc => gc.GymClassId == id && !gc.IsClassDeleted);
         }
 
         public List<GymClass> GetByTrainerId(Guid trainerId)
         {
-            return [.. _context.GymClasses
+            return [.. _dbSet
                 .Where(gc => gc.TrainerId == trainerId && !gc.IsClassDeleted)];
         }
 
         public GymClass Add(GymClass gymClass)
         {
-            var newGymClass = _context.GymClasses.Add(gymClass);
+            _dbSet.Add(gymClass);
             _context.SaveChanges();
-            return newGymClass.Entity;
+            return gymClass;
         }
 
         public void Update(GymClass gymClass)
         {
-            _context.GymClasses.Update(gymClass);
+            _dbSet.Update(gymClass);
             _context.SaveChanges();
         }
 
         public void Delete(Guid id)
         {
-            var gymClass = _context.GymClasses
-                .FirstOrDefault(gc => gc.GymClassId == id && !gc.IsClassDeleted);
+            var gymClass = _dbSet.FirstOrDefault(gc => gc.GymClassId == id && !gc.IsClassDeleted);
             if (gymClass != null)
             {
                 gymClass.IsClassDeleted = true;
-                _context.GymClasses.Update(gymClass);
+                _dbSet.Update(gymClass);
                 _context.SaveChanges();
             }
         }
 
         public void Recover(Guid id)
         {
-            var gymClass = _context.GymClasses
-                .FirstOrDefault(gc => gc.GymClassId == id);
+            var gymClass = _dbSet.FirstOrDefault(gc => gc.GymClassId == id);
             if (gymClass != null)
             {
                 gymClass.IsClassDeleted = false;
-                _context.GymClasses.Update(gymClass);
+                _dbSet.Update(gymClass);
                 _context.SaveChanges();
             }
         }
 
-        public void Delete(GymClass gymClass)
+        public List<GymClass> GetDeleted()
         {
-            gymClass.IsClassDeleted = true;
-            _context.GymClasses.Update(gymClass);
-            _context.SaveChanges();
+            return [.. _dbSet.Where(gc => gc.IsClassDeleted)];
+        }
+
+        public GymClass? GetDeletedById(Guid id)
+        {
+            return _dbSet.FirstOrDefault(gc => gc.GymClassId == id && gc.IsClassDeleted);
         }
     }
 }

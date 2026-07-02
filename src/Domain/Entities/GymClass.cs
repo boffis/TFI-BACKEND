@@ -18,6 +18,6 @@ namespace GymManagement.Domain.Entities
 
         public bool IsClassDeleted { get; set; } = false;
 
-        public ICollection<Inscription> Inscriptions { get; set; } = new List<Inscription>();
+        public ICollection<Inscription> Inscriptions { get; set; } = [];
     }
 }

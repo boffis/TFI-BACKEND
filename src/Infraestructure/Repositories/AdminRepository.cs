@@ -1,21 +1,52 @@
 using GymManagement.Application.Interfaces;
-using GymManagement.Application.Mappers;
-using GymManagement.Application.Requests;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Persistence;
 
+
 namespace GymManagement.Infrastructure.Repositories
 {
-    public class AdminRepository : BaseRepository<User>, IAdminRepository
+    public class AdminRepository : BaseRepository<Admin>, IAdminRepository
     {
-        public AdminRepository(ApplicationDbContext context) : base(context)
-        {
+        public AdminRepository(ApplicationDbContext context) : base(context) { }
 
+        public List<Admin> GetAllAdmins()
+        {
+            return GetAll();
         }
 
-        public User? GetUserDeleted(Guid UserId)
+        public Admin? GetAdminById(Guid id)
         {
-            return _context.Users.FirstOrDefault(c => c.UserId == UserId && c.IsUserDeleted == true);
+            return GetById(id);
+        }
+
+        public List<Admin> GetDeletedAdmins()
+        {
+            return GetDeleteds();
+        }
+
+        public Admin? GetDeletedAdminById(Guid id)
+        {
+            return GetDeletedById(id);
+        }
+
+        public Admin AddAdmin(Admin admin)
+        {
+            return Add(admin);
+        }
+
+        public void UpdateAdmin(Admin admin)
+        {
+            Update(admin);
+        }
+
+        public void DeleteAdmin(Guid id)
+        {
+            Delete(id);
+        }
+
+        public void RecoverAdmin(Guid id)
+        {
+            Recover(id);
         }
     }
 }

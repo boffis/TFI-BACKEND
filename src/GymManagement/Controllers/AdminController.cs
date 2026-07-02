@@ -1,5 +1,6 @@
 using GymManagement.Application.Requests;
 using GymManagement.Application.Services;
+using GymManagement.Domain.Entities;
 using GymManagement.Presentation.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -19,50 +20,46 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpGet("Users")]
-        public ActionResult GetAll()
+        public ActionResult<List<Admin>> GetAllAdmins()
         {
-            var users = _adminService.GetAllUsers();
-            return Ok(users);
+            var admins = _adminService.GetAllAdmins();
+            return Ok(admins);
         }
 
         [HttpGet("{UserId}")]
-        public IActionResult GetUserById(Guid UserId)
+        public IActionResult GetAdminById(Guid UserId)
         {
-            var user = _adminService.GetUserById(UserId);
-            if (user == null)
-            {
-                return NotFound();
-            } return Ok(user);
+            var admin = _adminService.GetAdminById(UserId);
+            if (admin == null) return NotFound();
+            return Ok(admin);
         }
 
-        [HttpGet("DeletedUsers/{UserId}")]
-        public IActionResult GetUserDeleted(Guid UserId)
+        [HttpGet("Deleted/{UserId}")]
+        public IActionResult GetDeletedAdminById(Guid UserId)
         {
-            var user = _adminService.GetUserDeleted(UserId);
-            if (user == null)
-            {
-                return NotFound();
-            } return Ok(user);
+            var admin = _adminService.GetDeletedAdminById(UserId);
+            if (admin == null) return NotFound();
+            return Ok(admin);
         }
 
         [HttpPut("Update/{UserId}")]
-        public IActionResult UpdateUser(Guid UserId, [FromBody] UserRequest userRequest)
+        public IActionResult UpdateAdmin(Guid UserId, [FromBody] UserRequest request)
         {
-            var success = _adminService.UpdateUser(UserId, userRequest);
+            var success = _adminService.UpdateAdmin(UserId, request);
             return success ? NoContent() : NotFound();
         }
 
         [HttpDelete("Delete/{UserId}")]
-        public IActionResult DeleteUser(Guid UserId)
+        public IActionResult DeleteAdmin(Guid UserId)
         {
-            var success = _adminService.DeleteUser(UserId);
+            var success = _adminService.DeleteAdmin(UserId);
             return success ? NoContent() : NotFound();
         }
 
         [HttpPost("Recover/{UserId}")]
-        public IActionResult RecoverUser(Guid UserId)
+        public IActionResult RecoverAdmin(Guid UserId)
         {
-            var success = _adminService.RecoverUser(UserId);
+            var success = _adminService.RecoverAdmin(UserId);
             return success ? NoContent() : NotFound();
         }
     }

@@ -18,7 +18,6 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpPost("SignUp")]
-        [AllowAnonymous]
         public IActionResult SignUp([FromBody] UserRequest request)
         {
             var response = _authService.SignUpClient(request);
@@ -29,7 +28,6 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpPost("SignIn")]
-        [AllowAnonymous]
         public IActionResult SignIn([FromBody] SignInRequest request)
         {
             var response = _authService.SignIn(request);

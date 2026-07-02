@@ -25,7 +25,7 @@ namespace GymManagement.Infrastructure.Services
 
         public AuthResponse? SignUpClient(UserRequest request)
         {
-            if (_context.Users.Any(u => u.Email == request.Email)) return null;
+            if (_context.Clients.Any(u => u.Email == request.Email)) return null;
 
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
             Guid newId = Guid.NewGuid();
@@ -46,7 +46,7 @@ namespace GymManagement.Infrastructure.Services
 
         public AuthResponse? SignUpTrainer(TrainerRequest request)
         {
-            if (_context.Users.Any(u => u.Email == request.Email)) return null;
+            if (_context.Trainers.Any(u => u.Email == request.Email)) return null;
 
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
             Guid newId = Guid.NewGuid();
@@ -68,7 +68,7 @@ namespace GymManagement.Infrastructure.Services
 
         public AuthResponse? SignUpAdmin(UserRequest request)
         {
-            if (_context.Users.Any(u => u.Email == request.Email)) return null;
+            if (_context.Admins.Any(u => u.Email == request.Email)) return null;
 
             string hashedPassword = BCrypt.Net.BCrypt.HashPassword(request.Password);
             Guid newId = Guid.NewGuid();
@@ -89,14 +89,21 @@ namespace GymManagement.Infrastructure.Services
 
         public AuthResponse? SignIn(SignInRequest request)
         {
-            var user = _context.Users.FirstOrDefault(u => u.Email == request.Email && !u.IsUserDeleted);
-            if (user != null && BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
-            {
-                return BuildAuthResponse(user.UserId, user.Email, user.UserRole.ToString());
-            }
+            var client = _context.Clients.FirstOrDefault(c => c.Email == request.Email && !c.IsUserDeleted);
+            if (client != null && BCrypt.Net.BCrypt.Verify(request.Password, client.Password))
+                return BuildAuthResponse(client.UserId, client.Email, "Client");
 
-            return null;
+            var trainer = _context.Trainers.FirstOrDefault(t => t.Email == request.Email && !t.IsUserDeleted);
+            if (trainer != null && BCrypt.Net.BCrypt.Verify(request.Password, trainer.Password))
+                return BuildAuthResponse(trainer.UserId, trainer.Email, "Trainer");
+
+            var admin = _context.Admins.FirstOrDefault(a => a.Email == request.Email && !a.IsUserDeleted);
+            if (admin != null && BCrypt.Net.BCrypt.Verify(request.Password, admin.Password))
+                return BuildAuthResponse(admin.UserId, admin.Email, "Admin");
+
+            throw new UnauthorizedAccessException("Credenciales incorrectas.");;
         }
+
         private AuthResponse BuildAuthResponse(Guid userId, string email, string role)
         {
             return new AuthResponse

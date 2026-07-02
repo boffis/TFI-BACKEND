@@ -3,6 +3,5 @@
     public class TrainerResponse : UserResponse
     {
         public required string Specialization { get; set; }
-
     }
 }

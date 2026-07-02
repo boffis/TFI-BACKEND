@@ -8,112 +8,50 @@ namespace GymManagement.Application.Services
     public class TrainerService
     {
         private readonly ITrainerRepository _trainerRepository;
-        private readonly IGymClassRepository _gymClassRepository;
 
-        public TrainerService(ITrainerRepository trainerRepository, IGymClassRepository gymClassRepository)
+        public TrainerService(ITrainerRepository trainerRepository)
         {
             _trainerRepository = trainerRepository;
-            _gymClassRepository = gymClassRepository;
         }
 
-        public List<Trainer> GetAllTrainers()
-        {
-            return _trainerRepository.GetAll();
-        }
+        public List<Trainer> GetAllTrainers() => _trainerRepository.GetAll();
 
-        public Trainer? GetTrainerById(Guid UserId)
-        {
-            return _trainerRepository.GetById(UserId);
-        }
+        public Trainer? GetTrainerById(Guid id) => _trainerRepository.GetById(id);
 
-        public TrainerResponse UpdateTrainer(Guid trainerId, TrainerRequest request)
+        public List<Trainer> GetDeletedTrainers() => _trainerRepository.GetDeleteds();
+
+        public Trainer? GetDeletedTrainerById(Guid id) => _trainerRepository.GetDeletedById(id);
+
+        public bool UpdateTrainer(Guid id, TrainerRequest request)
         {
-            var trainer = _trainerRepository.GetById(trainerId) ?? 
-                throw new InvalidOperationException("Trainer no encontrado");
+            var trainer = _trainerRepository.GetById(id);
+            if (trainer == null) return false;
+
             trainer.Name = request.Name;
             trainer.Email = request.Email;
             trainer.Password = request.Password;
             trainer.Specialization = request.Specialization;
+
             _trainerRepository.Update(trainer);
-            return new TrainerResponse
-            {
-                UserId = trainer.UserId,
-                Name = trainer.Name,
-                Email = trainer.Email,
-                Password = trainer.Password,
-                Specialization = trainer.Specialization
-            };
-        }
-
-        public GymClassResponse CreateClass(Guid trainerId, ClassRequest request)
-        {
-            var trainer = _trainerRepository.GetById(trainerId) ?? 
-                throw new InvalidOperationException("Trainer no encontrado");
-            var gymClass = new GymClass
-            {
-                GymClassId = Guid.NewGuid(),
-                ClassName = request.ClassName,
-                ClassDescription = request.ClassDescription,
-                MaxCapacity = request.MaxCapacity,
-                Schedule = request.Schedule,
-                TrainerId = trainerId,
-                Trainer = trainer
-            };
-
-            _gymClassRepository.Add(gymClass);
-
-            return new GymClassResponse
-            {
-                GymClassId = gymClass.GymClassId,
-                ClassName = gymClass.ClassName,
-                ClassDescription = gymClass.ClassDescription,
-                MaxCapacity = gymClass.MaxCapacity,
-                TrainerId = gymClass.TrainerId,
-                Schedule = gymClass.Schedule
-            };
-        }
-
-        public bool ModifyTrainerClasses(Guid trainerId, Guid classId, ClassRequest request)
-        {
-            var gymClass = _gymClassRepository.GetById(classId);
-            if (gymClass == null || gymClass.TrainerId != trainerId)
-            {
-                return false;
-            }
-
-            gymClass.ClassName = request.ClassName;
-            gymClass.ClassDescription = request.ClassDescription;
-            gymClass.MaxCapacity = request.MaxCapacity;
-            gymClass.Schedule = request.Schedule;
-
-            _gymClassRepository.Update(gymClass);
             return true;
         }
 
-        public bool DeleteTrainerClasses(Guid trainerId, Guid classId)
+        public bool DeleteTrainer(Guid id)
         {
-            var gymClass = _gymClassRepository.GetById(classId);
-            if (gymClass == null || gymClass.TrainerId != trainerId)
-            {
-                return false;
-            }
+            var trainer = _trainerRepository.GetById(id);
+            if (trainer == null) return false;
 
-            _gymClassRepository.Delete(gymClass);
+            _trainerRepository.Delete(id);
             return true;
         }
 
-        public List<GymClassResponse> GetTrainerClasses(Guid trainerId)
+        public bool RecoverTrainer(Guid id)
         {
-            var classes = _gymClassRepository.GetByTrainerId(trainerId);
-            return [.. classes.Select(gc => new GymClassResponse
-            {
-                GymClassId = gc.GymClassId,
-                ClassName = gc.ClassName,
-                ClassDescription = gc.ClassDescription,
-                MaxCapacity = gc.MaxCapacity,
-                TrainerId = gc.TrainerId,
-                Schedule = gc.Schedule
-            })];
+            var trainer = _trainerRepository.GetDeletedById(id);
+            if (trainer == null) return false;
+
+            _trainerRepository.Recover(id);
+            return true;
         }
     }
 }

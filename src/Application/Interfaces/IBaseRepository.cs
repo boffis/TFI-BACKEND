@@ -1,14 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
-
-namespace GymManagement.Application.Interfaces
+﻿namespace GymManagement.Application.Interfaces
 {
     public interface IBaseRepository<T> where T : class
     {
         List<T> GetAll();
 
         T? GetById(Guid id);
+
+        List<T> GetDeleteds();
+
+        T? GetDeletedById(Guid id);
 
         T Add(T entity);
 

@@ -1,62 +1,54 @@
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
 
 namespace GymManagement.Application.Services
 {
-    public class AdminService 
+    public class AdminService
     {
         private readonly IAdminRepository _adminRepository;
-        private readonly ITrainerRepository _trainerRepository;
 
-        public AdminService(IAdminRepository adminRepository, ITrainerRepository trainerRepository) 
+        public AdminService(IAdminRepository adminRepository)
         {
             _adminRepository = adminRepository;
-            _trainerRepository = trainerRepository;
         }
 
-        public List<User> GetAllUsers()
-        {
-            return _adminRepository.GetAll();
-        }
+        public List<Admin> GetAllAdmins() => _adminRepository.GetAll();
 
-        public User? GetUserById(Guid UserId)
-        {
-            return _adminRepository.GetById(UserId);
-        }
+        public Admin? GetAdminById(Guid id) => _adminRepository.GetById(id);
 
-        public User? GetUserDeleted(Guid UserId)
-        {
-            return _adminRepository.GetUserDeleted(UserId);
-        }
+        public List<Admin> GetDeletedAdmins() => _adminRepository.GetDeleteds();
 
-        public bool UpdateUser(Guid UserId, UserRequest userRequest)
+        public Admin? GetDeletedAdminById(Guid id) => _adminRepository.GetDeletedById(id);
+
+        public bool UpdateAdmin(Guid id, UserRequest request)
         {
-            var user =  _adminRepository.GetById(UserId);
-            if (user == null) return false;
-            user.Name = userRequest.Name;
-            user.Email = userRequest.Email;
-            user.Password = userRequest.Password;
-            _adminRepository.Update(user);
+            var admin = _adminRepository.GetById(id);
+            if (admin == null) return false;
+
+            admin.Name = request.Name;
+            admin.Email = request.Email;
+            admin.Password = request.Password;
+
+            _adminRepository.Update(admin);
             return true;
         }
 
-        public bool DeleteUser(Guid UserId)
+        public bool DeleteAdmin(Guid id)
         {
-            var user = _adminRepository.GetById(UserId);
-            if (user == null) return false;
+            var admin = _adminRepository.GetById(id);
+            if (admin == null) return false;
 
-            _adminRepository.Delete(UserId);
+            _adminRepository.Delete(id);
             return true;
         }
 
-        public bool RecoverUser(Guid UserId)
+        public bool RecoverAdmin(Guid id)
         {
-            var user = _adminRepository.GetUserDeleted(UserId);
-            if (user == null) return false;
+            var admin = _adminRepository.GetDeletedById(id);
+            if (admin == null) return false;
 
-            _adminRepository.Recover(UserId);
+            _adminRepository.Recover(id);
             return true;
         }
     }

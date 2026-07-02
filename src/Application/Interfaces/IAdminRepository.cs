@@ -2,8 +2,7 @@ using GymManagement.Domain.Entities;
 
 namespace GymManagement.Application.Interfaces
 {
-    public interface IAdminRepository : IBaseRepository<User>
+    public interface IAdminRepository : IBaseRepository<Admin>
     {
-        User? GetUserDeleted(Guid UserId);
     }
 }

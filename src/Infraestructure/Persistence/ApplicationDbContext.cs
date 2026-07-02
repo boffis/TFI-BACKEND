@@ -5,7 +5,6 @@ namespace GymManagement.Infrastructure.Persistence
 {
     public class ApplicationDbContext : DbContext
     {
-        public DbSet<User> Users { get; set; }
         public DbSet<Admin> Admins { get; set; }
         public DbSet<Trainer> Trainers { get; set; }
         public DbSet<Client> Clients { get; set; }
@@ -23,11 +22,9 @@ namespace GymManagement.Infrastructure.Persistence
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<Client>().ToTable("Clients");
-
-            modelBuilder.Entity<Trainer>().ToTable("Trainers");
-
-            modelBuilder.Entity<Admin>().ToTable("Admins");
+            modelBuilder.Entity<Client>().ToTable("Clients").HasKey(c => c.UserId);
+            modelBuilder.Entity<Trainer>().ToTable("Trainers").HasKey(t => t.UserId);
+            modelBuilder.Entity<Admin>().ToTable("Admins").HasKey(a => a.UserId);
 
             modelBuilder.Entity<Client>()
                .HasOne(c => c.Membership)

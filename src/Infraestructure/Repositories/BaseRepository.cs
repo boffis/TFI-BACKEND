@@ -26,6 +26,16 @@ namespace GymManagement.Infrastructure.Repositories
             return _dbSet.FirstOrDefault(x => x.UserId == id && !x.IsUserDeleted);
         }
 
+        public virtual List<T> GetDeleteds()
+        {
+            return [.. _dbSet.Where(x => x.IsUserDeleted)];
+        }
+
+        public virtual T? GetDeletedById(Guid id)
+        {
+            return _dbSet.FirstOrDefault(x => x.UserId == id && x.IsUserDeleted);
+        }
+
         public virtual T Add(T entity)
         {
             _dbSet.Add(entity);
