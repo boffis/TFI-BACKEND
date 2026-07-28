@@ -21,5 +21,7 @@ namespace GymManagement.Application.Interfaces
         void Recover(Guid id);
 
         GymClass Add(GymClass gymClass);
+
+        bool Exists(Guid gymClassScheduleId, DateTime scheduleDateTime);
     }
 }

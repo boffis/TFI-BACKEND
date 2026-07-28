@@ -78,5 +78,12 @@ namespace GymManagement.Infrastructure.Repositories
         {
             return _dbSet.FirstOrDefault(gc => gc.GymClassId == id && gc.IsClassDeleted);
         }
+
+        public bool Exists(Guid gymClassScheduleId, DateTime scheduleDateTime)
+        {
+            return _dbSet.Any(gc => gc.GymClassScheduleId == gymClassScheduleId 
+                                 && gc.Schedule == scheduleDateTime 
+                                 && !gc.IsClassDeleted);
+        }
     }
 }

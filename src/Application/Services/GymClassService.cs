@@ -1,7 +1,8 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
+using GymManagement.Application.Exceptions;
 
 namespace GymManagement.Application.Services
 {
@@ -35,7 +36,7 @@ namespace GymManagement.Application.Services
         public GymClassResponse CreateClass(Guid trainerId, ClassRequest request)
         {
             var trainer = _trainerRepository.GetById(trainerId) ??
-                throw new InvalidOperationException("Trainer no encontrado");
+                throw new NotFoundException("Trainer no encontrado");
 
             var gymClass = new GymClass
             {

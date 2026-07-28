@@ -1,4 +1,4 @@
-﻿using GymManagement.Domain.Enums;
+using GymManagement.Domain.Enums;
 
 namespace GymManagement.Domain.Entities
 {
@@ -11,9 +11,25 @@ namespace GymManagement.Domain.Entities
         public required string Email { get; set; }
    
         public required string Password { get; set; }
-      
-        public UserRole UserRole { get; set; } = UserRole.Client;
+
+        public DateOnly DateOfBirth { get; set; }
+
+        public required string DNI { get; set; }
+
+        public required string Gender { get; set; }
+
+        public required string PhoneNumber { get; set; }
      
-        public bool IsUserDeleted { get; set; } = false;             
+        public bool IsUserDeleted { get; set; } = false;
+
+        public bool IsEmailConfirmed { get; set; } = false;
+
+        public string? EmailConfirmationToken { get; set; }
+
+        public DateTime? EmailConfirmationTokenExpiration { get; set; }
+
+        public string? PasswordResetToken { get; set; }
+
+        public DateTime? PasswordResetTokenExpiration { get; set; }
     }
 }

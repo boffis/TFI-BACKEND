@@ -43,25 +43,28 @@ builder.Services.AddControllers()
 //});
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("GymManagementConnectionString")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("GymManagementConnectionString"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure()));
 
 builder.Services.Configure<MercadoPagoSettings>(
     builder.Configuration.GetSection("MercadoPago"));
 
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
 builder.Services.AddScoped<IAdminRepository, AdminRepository>();
-builder.Services.AddScoped<AdminService>();
-
 builder.Services.AddScoped<ITrainerRepository, TrainerRepository>();
-builder.Services.AddScoped<TrainerService>();
-
 builder.Services.AddScoped<IClientRepository, ClientRepository>();
-builder.Services.AddScoped<ClientService>();
+
+builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddScoped<IGymClassRepository, GymClassRepository>();
 builder.Services.AddScoped<IInscriptionRepository, InscriptionRepository>();
 builder.Services.AddScoped<GymClassService>();
+
+builder.Services.AddScoped<IGymClassScheduleRepository, GymClassScheduleRepository>();
+builder.Services.AddScoped<GymClassScheduleService>();
 
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<PaymentService>();
@@ -74,7 +77,10 @@ builder.Services.AddScoped<MembershipService>();
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(Policies.OnlyAdmin, policy => policy.RequireClaim(ClaimTypes.Role, "Admin"))
     .AddPolicy(Policies.OnlyTrainer, policy => policy.RequireClaim(ClaimTypes.Role, "Trainer"))
-    .AddPolicy(Policies.OnlyClient, policy => policy.RequireClaim(ClaimTypes.Role, "Client"));
+    .AddPolicy(Policies.OnlyClient, policy => policy.RequireClaim(ClaimTypes.Role, "Client"))
+    .AddPolicy(Policies.AdminOrTrainer, policy => policy.RequireAssertion(ctx =>
+        ctx.User.HasClaim(ClaimTypes.Role, "Admin") ||
+        ctx.User.HasClaim(ClaimTypes.Role, "Trainer")));
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -109,5 +115,31 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    context.Database.Migrate();
+    
+    // Seed Admin
+    if (!context.Admins.Any(a => a.Email == "highlevelperformancegym@gmail.com"))
+    {
+        var admin = new GymManagement.Domain.Entities.Admin
+        {
+            UserId = Guid.NewGuid(),
+            Name = "GymAdmin",
+            Email = "highlevelperformancegym@gmail.com",
+            Password = BCrypt.Net.BCrypt.HashPassword("Admin1234"),
+            DateOfBirth = new DateOnly(2002, 6, 21),
+            DNI = "12345678",
+            Gender = "Other",
+            PhoneNumber = "3416150161",
+            IsUserDeleted = false,
+            IsEmailConfirmed = true
+        };
+        context.Admins.Add(admin);
+        context.SaveChanges();
+    }
+}
 
 app.Run();

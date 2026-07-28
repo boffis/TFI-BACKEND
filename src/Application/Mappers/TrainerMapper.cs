@@ -1,7 +1,6 @@
-﻿using GymManagement.Application.Requests;
+using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
 
 namespace GymManagement.Application.Mappers
 {
@@ -15,6 +14,11 @@ namespace GymManagement.Application.Mappers
                 Name = trainer.Name,
                 Email = trainer.Email,
                 Password = trainer.Password,
+                DateOfBirth = trainer.DateOfBirth,
+                DNI = trainer.DNI,
+                Gender = trainer.Gender,
+                PhoneNumber = trainer.PhoneNumber,
+                Role = trainer.GetType().Name,
                 Specialization = trainer.Specialization!
             };
         }
@@ -27,7 +31,10 @@ namespace GymManagement.Application.Mappers
                 Name = trainerRequest.Name,
                 Email = trainerRequest.Email,
                 Password = trainerRequest.Password,
-                UserRole = UserRole.Trainer,
+                DateOfBirth = trainerRequest.DateOfBirth,
+                DNI = trainerRequest.DNI,
+                Gender = trainerRequest.Gender,
+                PhoneNumber = trainerRequest.PhoneNumber,
                 IsUserDeleted = false,
                 Specialization = trainerRequest.Specialization
             };

@@ -1,7 +1,8 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
+using GymManagement.Application.Exceptions;
 
 namespace GymManagement.Application.Services
 {
@@ -25,10 +26,10 @@ namespace GymManagement.Application.Services
         //public PaymentResponse? CreatePayment(Guid clientId, PaymentRequest request)
         //{
         //    var client = _clientRepository.GetById(clientId) ?? 
-        //        throw new InvalidOperationException("Client not found");
+        //        throw new ConflictException("Client not found");
 
         //    var membership = _membershipRepository.GetMembershipById(request.MembershipId) ??
-        //        throw new InvalidOperationException("Membership not found");
+        //        throw new ConflictException("Membership not found");
 
         //    var newPayment = new Payment
         //    {

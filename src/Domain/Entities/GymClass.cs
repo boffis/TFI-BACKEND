@@ -16,6 +16,10 @@ namespace GymManagement.Domain.Entities
 
         public required DateTime Schedule { get; set; }
 
+        public Guid? GymClassScheduleId { get; set; }
+
+        public GymClassSchedule? GymClassSchedule { get; set; }
+
         public bool IsClassDeleted { get; set; } = false;
 
         public ICollection<Inscription> Inscriptions { get; set; } = [];

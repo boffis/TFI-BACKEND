@@ -8,3 +8,6 @@ obj/
 *.db
 *.db-shm
 *.db-wal
+
+##secrets
+appsettings.Development.json

@@ -1,21 +1,27 @@
-﻿using GymManagement.Application.Requests;
+using GymManagement.Application.Interfaces;
+using GymManagement.Application.Requests;
+using GymManagement.Application.Responses;
 using GymManagement.Application.Services;
 using GymManagement.Presentation.Authorization;
+using GymManagement.Application.Exceptions;
+using GymManagement.Presentation.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 
 namespace GymManagement.Presentation.Controllers
 {
+    [Route("[controller]")]
+    [ApiController]
     public class GymClassController : ControllerBase
     {
         private readonly GymClassService _gymClassService;
-        private readonly TrainerService _trainerService;
+        private readonly IUserService _userService;
 
-        public GymClassController(GymClassService gymClassService, TrainerService trainerService)
+        public GymClassController(GymClassService gymClassService, IUserService userService)
         {
             _gymClassService = gymClassService;
-            _trainerService = trainerService;
+            _userService = userService;
         }
 
         [HttpGet("Classes")]
@@ -62,7 +68,7 @@ namespace GymManagement.Presentation.Controllers
         [Authorize(Policy = Policies.OnlyTrainer)]
         public IActionResult GetTrainerClasses()
         {
-            var trainerId = VerifyIfThisTrainerCreatedTheClass();
+            var trainerId = User.GetUserId();
             var result = _gymClassService.GetTrainerClasses(trainerId);
             return Ok(result);
         }
@@ -71,9 +77,9 @@ namespace GymManagement.Presentation.Controllers
         [Authorize(Policy = Policies.OnlyTrainer)]
         public IActionResult CreateClass([FromBody] ClassRequest request)
         {
-            var trainerId = VerifyIfThisTrainerCreatedTheClass();
-            var trainer = _trainerService.GetTrainerById(trainerId);
-            if (trainer == null)
+            var trainerId = User.GetUserId();
+            var user = _userService.GetById(trainerId);
+            if (user == null || user is not TrainerResponse trainer)
                 return NotFound("Entrenador no encontrado.");
             if (string.IsNullOrWhiteSpace(trainer.Specialization))
                 return BadRequest("El entrenador debe tener una especialización.");
@@ -85,7 +91,7 @@ namespace GymManagement.Presentation.Controllers
         [Authorize(Policy = Policies.OnlyTrainer)]
         public IActionResult ModifyTrainerClasses(Guid classId, [FromBody] ClassRequest request)
         {
-            var trainerId = VerifyIfThisTrainerCreatedTheClass();
+            var trainerId = User.GetUserId();
             var success = _gymClassService.ModifyTrainerClasses(trainerId, classId, request);
             if (!success) 
                 return NotFound("Clase no encontrada o no pertenece a este entrenador.");
@@ -96,18 +102,11 @@ namespace GymManagement.Presentation.Controllers
         [Authorize(Policy = Policies.OnlyTrainer)]
         public IActionResult DeleteTrainerClasses(Guid classId)
         {
-            var trainerId = VerifyIfThisTrainerCreatedTheClass();
+            var trainerId = User.GetUserId();
             var success = _gymClassService.DeleteTrainerClasses(trainerId, classId);
             if (!success) 
                 return NotFound("Clase no encontrada o no pertenece a este entrenador.");
             return NoContent();
-        }
-
-        private Guid VerifyIfThisTrainerCreatedTheClass()
-        {
-            var claim = User.FindFirst(ClaimTypes.NameIdentifier) ?? 
-                throw new UnauthorizedAccessException("Usuario no autenticado");
-            return Guid.Parse(claim.Value);
         }
     }
 }

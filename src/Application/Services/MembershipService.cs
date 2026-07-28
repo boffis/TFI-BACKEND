@@ -23,7 +23,6 @@ namespace GymManagement.Application.Services
             {
                 MembershipType.Weekly => 7,
                 MembershipType.Monthly => 30,
-                MembershipType.Quarterly => 90,
                 MembershipType.Annual => 365,
                 _ => 0
             };

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using System.Net;
+using GymManagement.Application.Exceptions;
 
 namespace GymManagement.Presentation.Middlewares
 {
@@ -20,19 +21,22 @@ namespace GymManagement.Presentation.Middlewares
         {
             _logger.LogError(exception, "Ha ocurrido un error no controlado: {Message}", exception.Message);
 
-            (int statusCode, string title) = exception switch
+            (int statusCode, string title, string defaultMessage) = exception switch
             {
-                UnauthorizedAccessException => ((int)HttpStatusCode.Unauthorized, "No autorizado"),
-                InvalidOperationException => ((int)HttpStatusCode.BadRequest, "Operación inválida"),
-                KeyNotFoundException => ((int)HttpStatusCode.NotFound, "Recurso no encontrado"),
-                _ => ((int)HttpStatusCode.InternalServerError, "Error interno del servidor")
+                UnauthorizedException => ((int)HttpStatusCode.Unauthorized, "No autorizado", "Acceso denegado."),
+                ConflictException => ((int)HttpStatusCode.Conflict, "Conflicto", "Operación inválida."),
+                NotFoundException => ((int)HttpStatusCode.NotFound, "Recurso no encontrado", "El recurso solicitado no fue encontrado."),
+                _ => ((int)HttpStatusCode.InternalServerError, "Error interno del servidor", "Ha ocurrido un error interno.")
             };
+
+            bool hasMeaningfulMessage = !string.IsNullOrWhiteSpace(exception.Message) && !exception.Message.Contains("Exception of type");
+            string detail = hasMeaningfulMessage ? exception.Message : defaultMessage;
 
             var problemDetails = new ProblemDetails
             {
                 Status = statusCode,
                 Title = title,
-                Detail = exception.Message,
+                Detail = detail,
                 Instance = httpContext.Request.Path
             };
 

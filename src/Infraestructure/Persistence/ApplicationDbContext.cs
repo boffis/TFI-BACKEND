@@ -1,4 +1,4 @@
-﻿using GymManagement.Domain.Entities;
+using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace GymManagement.Infrastructure.Persistence
@@ -10,6 +10,7 @@ namespace GymManagement.Infrastructure.Persistence
         public DbSet<Client> Clients { get; set; }
         public DbSet<Inscription> Inscriptions { get; set; }
         public DbSet<GymClass> GymClasses { get; set; }
+        public DbSet<GymClassSchedule> GymClassSchedules { get; set; }
         public DbSet<Membership> Memberships { get; set; }
         public DbSet<Payment> Payments { get; set; }
 
@@ -37,6 +38,18 @@ namespace GymManagement.Infrastructure.Persistence
                 .WithMany(t => t.GymClasses)
                 .HasForeignKey(gc => gc.TrainerId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GymClassSchedule>()
+                .HasOne(gcs => gcs.Trainer)
+                .WithMany(t => t.GymClassSchedules)
+                .HasForeignKey(gcs => gcs.TrainerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<GymClass>()
+                .HasOne(gc => gc.GymClassSchedule)
+                .WithMany(gcs => gcs.GymClasses)
+                .HasForeignKey(gc => gc.GymClassScheduleId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<Inscription>()
                 .HasKey(i => new { i.ClientId, i.GymClassId });

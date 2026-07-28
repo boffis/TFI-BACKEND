@@ -1,7 +1,5 @@
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
-using GymManagement.Presentation.Authorization;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace GymManagement.Presentation.Controllers
@@ -18,13 +16,27 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpPost("SignUp")]
-        public IActionResult SignUp([FromBody] UserRequest request)
+        public async Task<IActionResult> SignUp([FromBody] UserRequest request)
         {
-            var response = _authService.SignUpClient(request);
-            if (response == null)
-                return BadRequest("El email ya está en uso.");
+            string baseUrl = $"{Request.Scheme}://{Request.Host}";
+            bool result = await _authService.SignUpAsync(request, baseUrl);
+            
+            if (!result)
+                return BadRequest("El email ya se encuentra registrado.");
 
-            return Ok(response);
+            return Ok(new { message = "Registro exitoso. Se ha enviado un correo de confirmación a tu casilla de email. Por favor confírmalo antes de iniciar sesión." });
+        }
+
+        [HttpGet("ConfirmEmail")]
+        public IActionResult ConfirmEmail([FromQuery] string email, [FromQuery] string token)
+        {
+            bool success = _authService.ConfirmEmail(email, token);
+            if (!success)
+            {
+                return BadRequest(new { message = "El enlace de confirmación es incorrecto o han transcurrido más de 48 horas. Si tu token expiró, la cuenta fue eliminada y deberás registrarte nuevamente." });
+            }
+
+            return Ok(new { message = "Tu cuenta ha sido verificada correctamente. Ya puedes iniciar sesión en Gym Management." });
         }
 
         [HttpPost("SignIn")]
@@ -37,26 +49,23 @@ namespace GymManagement.Presentation.Controllers
             return Ok(response);
         }
 
-        [HttpPost("CreateTrainer")]
-        [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult CreateTrainer([FromBody] TrainerRequest request)
+        [HttpPost("ForgotPassword")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
         {
-            var response = _authService.SignUpTrainer(request);
-            if (response == null)
-                return BadRequest("El email ya está en uso.");
-
-            return Ok(response);
+            await _authService.ForgotPasswordAsync(request);
+            return Ok(new { message = "Si la cuenta existe y está confirmada, se ha enviado un correo electrónico con instrucciones para restablecer tu contraseña." });
         }
-
-        [HttpPost("CreateAdmin")]
-        [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult CreateAdmin([FromBody] UserRequest request)
+        
+        [HttpPost("ResetPassword")]
+        public IActionResult ResetPassword([FromBody] ResetPasswordRequest request)
         {
-            var response = _authService.SignUpAdmin(request);
-            if (response == null)
-                return BadRequest("El email ya está en uso.");
+            bool success = _authService.ResetPassword(request);
+            if (!success)
+            {
+                return BadRequest(new { message = "El token de restablecimiento es inválido o ha expirado." });
+            }
 
-            return Ok(response);
+            return Ok(new { message = "Tu contraseña ha sido restablecida exitosamente. Ya puedes iniciar sesión con tu nueva contraseña." });
         }
     }
 }

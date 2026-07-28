@@ -1,7 +1,8 @@
-﻿using GymManagement.Domain.Entities;
+using GymManagement.Domain.Entities;
 using GymManagement.Domain.Enums;
 using GymManagement.Infrastructure.Persistence;
 using GymManagement.Infrastructure.Settings;
+using GymManagement.Application.Exceptions;
 using MercadoPago.Client.Preference;
 using MercadoPago.Config;
 using Microsoft.Extensions.Options;
@@ -26,7 +27,6 @@ namespace GymManagement.Infrastructure.Payments
             {
                 MembershipType.Weekly => 5000m,
                 MembershipType.Monthly => 10000m,
-                MembershipType.Quarterly => 25000m,
                 MembershipType.Annual => 90000m,
                 _ => 0m
             };
@@ -38,7 +38,6 @@ namespace GymManagement.Infrastructure.Payments
             {
                 MembershipType.Weekly => 7,
                 MembershipType.Monthly => 30,
-                MembershipType.Quarterly => 90,
                 MembershipType.Annual => 365,
                 _ => 0
             };
@@ -49,7 +48,7 @@ namespace GymManagement.Infrastructure.Payments
             var membership = await _context.Memberships.FindAsync(membershipId);
             if (membership == null)
             {
-                throw new InvalidOperationException($"Membership {membershipId} no encontrada.");
+                throw new NotFoundException($"Membership {membershipId} no encontrada.");
             }
 
             var price = GetMembershipPrice(membershipType);

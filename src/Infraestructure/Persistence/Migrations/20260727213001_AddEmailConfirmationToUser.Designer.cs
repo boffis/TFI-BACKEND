@@ -4,6 +4,7 @@ using GymManagement.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace GymManagement.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260727213001_AddEmailConfirmationToUser")]
+    partial class AddEmailConfirmationToUser
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -62,12 +65,6 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
                     b.Property<string>("Password")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PasswordResetToken")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("PasswordResetTokenExpiration")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
@@ -119,12 +116,6 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PasswordResetToken")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("PasswordResetTokenExpiration")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -147,9 +138,6 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("GymClassScheduleId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("IsClassDeleted")
                         .HasColumnType("bit");
 
@@ -164,49 +152,9 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
 
                     b.HasKey("GymClassId");
 
-                    b.HasIndex("GymClassScheduleId");
-
                     b.HasIndex("TrainerId");
 
                     b.ToTable("GymClasses");
-                });
-
-            modelBuilder.Entity("GymManagement.Domain.Entities.GymClassSchedule", b =>
-                {
-                    b.Property<Guid>("GymClassScheduleId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("ClassDescription")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("ClassName")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<int>("DayOfWeek")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsWeekly")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("MaxCapacity")
-                        .HasColumnType("int");
-
-                    b.Property<TimeSpan>("TimeOfDay")
-                        .HasColumnType("time");
-
-                    b.Property<Guid>("TrainerId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.HasKey("GymClassScheduleId");
-
-                    b.HasIndex("TrainerId");
-
-                    b.ToTable("GymClassSchedules");
                 });
 
             modelBuilder.Entity("GymManagement.Domain.Entities.Inscription", b =>
@@ -327,12 +275,6 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("PasswordResetToken")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("PasswordResetTokenExpiration")
-                        .HasColumnType("datetime2");
-
                     b.Property<string>("PhoneNumber")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
@@ -347,26 +289,8 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GymManagement.Domain.Entities.GymClass", b =>
                 {
-                    b.HasOne("GymManagement.Domain.Entities.GymClassSchedule", "GymClassSchedule")
-                        .WithMany("GymClasses")
-                        .HasForeignKey("GymClassScheduleId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.HasOne("GymManagement.Domain.Entities.Trainer", "Trainer")
                         .WithMany("GymClasses")
-                        .HasForeignKey("TrainerId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("GymClassSchedule");
-
-                    b.Navigation("Trainer");
-                });
-
-            modelBuilder.Entity("GymManagement.Domain.Entities.GymClassSchedule", b =>
-                {
-                    b.HasOne("GymManagement.Domain.Entities.Trainer", "Trainer")
-                        .WithMany("GymClassSchedules")
                         .HasForeignKey("TrainerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -427,11 +351,6 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
                     b.Navigation("Inscriptions");
                 });
 
-            modelBuilder.Entity("GymManagement.Domain.Entities.GymClassSchedule", b =>
-                {
-                    b.Navigation("GymClasses");
-                });
-
             modelBuilder.Entity("GymManagement.Domain.Entities.Membership", b =>
                 {
                     b.Navigation("Payments");
@@ -439,8 +358,6 @@ namespace GymManagement.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("GymManagement.Domain.Entities.Trainer", b =>
                 {
-                    b.Navigation("GymClassSchedules");
-
                     b.Navigation("GymClasses");
                 });
 #pragma warning restore 612, 618
