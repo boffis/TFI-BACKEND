@@ -43,6 +43,12 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
+      
+      - name: Set up .NET Core
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.x'
+
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
@@ -54,6 +60,15 @@ jobs:
           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_665DA86E562443F5A7E87501123D82CE }}
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_468EB11C28B448FB8DF2FF314F765611 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2058794F4CF84A6B915E1403D4448495 }}
+
+      - name: Install dotnet-ef tools
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Run EF Core migrations
+        run: dotnet ef database update --project src/Infraestructure/GymManagement.Infrastructure.csproj --startup-project src/GymManagement/GymManagement.Presentation.csproj --connection "${{ secrets.DB_CONNECTION_STRING }}"
+        env:
+          ASPNETCORE_ENVIRONMENT: Production
+          ConnectionStrings__GymManagementConnectionString: ${{ secrets.DB_CONNECTION_STRING }}
 
       - name: Deploy to Azure Web App
         id: deploy-to-webapp
