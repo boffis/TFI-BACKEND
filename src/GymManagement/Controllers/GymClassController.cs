@@ -15,97 +15,97 @@ namespace GymManagement.Presentation.Controllers
     [ApiController]
     public class GymClassController : ControllerBase
     {
-        private readonly GymClassService _gymClassService;
+        private readonly IGymClassService _gymClassService;
         private readonly IUserService _userService;
 
-        public GymClassController(GymClassService gymClassService, IUserService userService)
+        public GymClassController(IGymClassService gymClassService, IUserService userService)
         {
             _gymClassService = gymClassService;
             _userService = userService;
         }
 
-        [HttpGet("Classes")]
+        [HttpGet]
         public IActionResult GetClasses()
         {
             var classes = _gymClassService.GetAllClasses();
             return Ok(classes);
         }
 
-        [HttpGet("Classes/{classId}")]
+        [HttpGet("ScheduledAndSpecialClasses")]
+        public IActionResult GetScheduledAndSpecialClasses()
+        {
+            var result = _gymClassService.GetScheduledAndSpecialClasses();
+            return Ok(result);
+        }
+
+        [HttpGet("{classId}")]
         public IActionResult GetClassById(Guid classId)
         {
-            var gymClass = _gymClassService.GetClassById(classId);
-            if (gymClass == null) 
-                return NotFound();
+            var gymClass = _gymClassService.GetAdminClassById(classId);
             return Ok(gymClass);
         }
 
+        [HttpGet("admin/{classId}")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public IActionResult GetAdminClassById(Guid classId)
+        {
+            var result = _gymClassService.GetAdminClassById(classId);
+            return Ok(result);
+        }
+
         [HttpPost("{classId}/join/{clientId}")]
+        [Authorize]
         public IActionResult JoinClass(Guid clientId, Guid classId)
         {
-            var result = _gymClassService.JoinClass(clientId, classId);
-            if (!result) return BadRequest("No se pudo inscribir: clase llena o cliente ya inscripto.");
+            _gymClassService.JoinClass(clientId, classId, User.GetUserId(), User.GetUserRole());
             return Ok("Inscripción realizada con éxito.");
         }
 
         [HttpDelete("{classId}/leave/{clientId}")]
+        [Authorize]
         public IActionResult LeaveClass(Guid clientId, Guid classId)
         {
-            var result = _gymClassService.LeaveClass(clientId, classId);
-            if (!result) return BadRequest("El cliente no estaba inscripto en esta clase.");
+            _gymClassService.LeaveClass(clientId, classId, User.GetUserId(), User.GetUserRole());
             return Ok("Inscripción eliminada correctamente.");
         }
 
         [HttpGet("{classId}/clients")]
-        [Authorize(Policy = Policies.OnlyAdmin)]
+        [Authorize(Policy = Policies.AdminOrTrainer)]
         public IActionResult GetClientsByClass(Guid classId)
         {
-            var clients = _gymClassService.GetClientsByClass(classId);
+            var clients = _gymClassService.GetClientsByClass(classId, User.GetUserId(), User.GetUserRole());
             return Ok(clients);
         }
 
-        [HttpGet("Classes/MyClasses")]
-        [Authorize(Policy = Policies.OnlyTrainer)]
-        public IActionResult GetTrainerClasses()
+        [HttpGet("ClassesByTrainer/{trainerId}")]
+        [Authorize(Policy = Policies.AdminOrTrainer)]
+        public IActionResult GetTrainerClasses(Guid trainerId)
         {
-            var trainerId = User.GetUserId();
-            var result = _gymClassService.GetTrainerClasses(trainerId);
+            var result = _gymClassService.GetTrainerClasses(trainerId, User.GetUserId(), User.GetUserRole());
             return Ok(result);
         }
 
-        [HttpPost("Classes/CreateClass")]
-        [Authorize(Policy = Policies.OnlyTrainer)]
+        [HttpPost("CreateClass")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
         public IActionResult CreateClass([FromBody] ClassRequest request)
         {
-            var trainerId = User.GetUserId();
-            var user = _userService.GetById(trainerId);
-            if (user == null || user is not TrainerResponse trainer)
-                return NotFound("Entrenador no encontrado.");
-            if (string.IsNullOrWhiteSpace(trainer.Specialization))
-                return BadRequest("El entrenador debe tener una especialización.");
-            var result = _gymClassService.CreateClass(trainerId, request);
-            return CreatedAtAction(nameof(GetClassById),"GymClass", new { classId = result.GymClassId },result);
+            var result = _gymClassService.CreateClass(request.TrainerId, request);
+            return CreatedAtAction(nameof(GetClassById), "GymClass", new { classId = result.GymClassId }, result);
         }
 
-        [HttpPut("Classes/{classId}")]
-        [Authorize(Policy = Policies.OnlyTrainer)]
-        public IActionResult ModifyTrainerClasses(Guid classId, [FromBody] ClassRequest request)
+        [HttpPut("{classId}")]
+        [Authorize(Policy = Policies.AdminOrTrainer)]
+        public IActionResult ModifyClass(Guid classId, [FromBody] ClassRequest request)
         {
-            var trainerId = User.GetUserId();
-            var success = _gymClassService.ModifyTrainerClasses(trainerId, classId, request);
-            if (!success) 
-                return NotFound("Clase no encontrada o no pertenece a este entrenador.");
+            _gymClassService.ModifyClass(classId, request, User.GetUserId(), User.GetUserRole());
             return NoContent();
         }
 
-        [HttpDelete("Classes/{classId}")]
-        [Authorize(Policy = Policies.OnlyTrainer)]
-        public IActionResult DeleteTrainerClasses(Guid classId)
+        [HttpDelete("{classId}")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public IActionResult DeleteClass(Guid classId)
         {
-            var trainerId = User.GetUserId();
-            var success = _gymClassService.DeleteTrainerClasses(trainerId, classId);
-            if (!success) 
-                return NotFound("Clase no encontrada o no pertenece a este entrenador.");
+            _gymClassService.DeleteClass(classId);
             return NoContent();
         }
     }

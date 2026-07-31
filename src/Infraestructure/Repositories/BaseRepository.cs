@@ -10,7 +10,7 @@ namespace GymManagement.Infrastructure.Repositories
         protected readonly ApplicationDbContext _context;
         protected readonly DbSet<T> _dbSet;
     
-    public BaseRepository(ApplicationDbContext context)
+        public BaseRepository(ApplicationDbContext context)
         {
             _context = context;
             _dbSet = context.Set<T>();
@@ -67,6 +67,16 @@ namespace GymManagement.Infrastructure.Repositories
             {
                 entity.IsUserDeleted = false;
                 _dbSet.Update(entity);
+                _context.SaveChanges();
+            }
+        }
+
+        public virtual void HardDelete(Guid id)
+        {
+            var entity = _dbSet.FirstOrDefault(x => x.UserId == id);
+            if (entity != null)
+            {
+                _dbSet.Remove(entity);
                 _context.SaveChanges();
             }
         }

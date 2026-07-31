@@ -1,4 +1,4 @@
-﻿namespace GymManagement.Application.Interfaces
+namespace GymManagement.Application.Interfaces
 {
     public interface IBaseRepository<T> where T : class
     {
@@ -17,5 +17,7 @@
         void Delete(Guid id);
 
         void Recover(Guid id);
+
+        void HardDelete(Guid id);
     }
 }

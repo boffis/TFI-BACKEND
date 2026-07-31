@@ -1,6 +1,7 @@
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Presentation.Authorization;
+using GymManagement.Presentation.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -35,7 +36,7 @@ namespace GymManagement.Presentation.Controllers
         [Authorize]
         public IActionResult GetById(Guid id)
         {
-            var user = _userService.GetById(id);
+            var user = _userService.GetDetailedById(id);
             if (user == null) return NotFound();
             return Ok(user);
         }
@@ -53,14 +54,30 @@ namespace GymManagement.Presentation.Controllers
         [Authorize]
         public IActionResult Update(Guid id, [FromBody] UserRequest request)
         {
+            var currentUserId = User.GetUserId();
+            var currentUserRole = User.GetUserRole();
+
+            if (currentUserId != id && currentUserRole != "Admin")
+            {
+                return Forbid();
+            }
+
             var success = _userService.Update(id, request);
             return success ? NoContent() : NotFound();
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Policy = Policies.OnlyAdmin)]
+        [Authorize]
         public IActionResult Delete(Guid id)
         {
+            var currentUserId = User.GetUserId();
+            var currentUserRole = User.GetUserRole();
+
+            if (currentUserId != id && currentUserRole != "Admin")
+            {
+                return Forbid();
+            }
+
             var success = _userService.Delete(id);
             return success ? NoContent() : NotFound();
         }
@@ -86,6 +103,13 @@ namespace GymManagement.Presentation.Controllers
             {
                 return StatusCode(501, ex.Message);
             }
+        }
+
+        [HttpGet("activetrainers")]
+        [Authorize]
+        public IActionResult GetActiveTrainers()
+        {
+            return Ok(_userService.GetActiveTrainers());
         }
     }
 }

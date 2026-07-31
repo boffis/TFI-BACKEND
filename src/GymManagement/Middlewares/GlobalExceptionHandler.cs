@@ -24,8 +24,10 @@ namespace GymManagement.Presentation.Middlewares
             (int statusCode, string title, string defaultMessage) = exception switch
             {
                 UnauthorizedException => ((int)HttpStatusCode.Unauthorized, "No autorizado", "Acceso denegado."),
+                ForbiddenException => ((int)HttpStatusCode.Forbidden, "Prohibido", "No tiene permisos para realizar esta acción."),
                 ConflictException => ((int)HttpStatusCode.Conflict, "Conflicto", "Operación inválida."),
                 NotFoundException => ((int)HttpStatusCode.NotFound, "Recurso no encontrado", "El recurso solicitado no fue encontrado."),
+                ValidationException => ((int)HttpStatusCode.BadRequest, "Error de validacion", "Hubo uno o mas errores de validación en la solicitud."),
                 _ => ((int)HttpStatusCode.InternalServerError, "Error interno del servidor", "Ha ocurrido un error interno.")
             };
 

@@ -1,8 +1,10 @@
-﻿namespace GymManagement.Application.Responses
+namespace GymManagement.Application.Responses
 {
     public class PaymentResponse
     {
         public Guid PaymentId { get; set; }
+
+        public Guid UserId { get; set; }
 
         public Guid MembershipId { get; set; }
 

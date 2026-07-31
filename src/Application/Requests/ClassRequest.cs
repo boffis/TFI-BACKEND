@@ -4,6 +4,7 @@ namespace GymManagement.Application.Requests
 {
     public class ClassRequest
     {
+        public required Guid TrainerId { get; set; }
         public required string ClassName { get; set; }
 
         public string? ClassDescription { get; set; }

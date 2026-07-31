@@ -1,4 +1,4 @@
-﻿using GymManagement.Domain.Entities;
+using GymManagement.Domain.Entities;
 
 namespace GymManagement.Application.Interfaces
 {
@@ -9,5 +9,8 @@ namespace GymManagement.Application.Interfaces
         Inscription Add(Inscription inscription);
         void Remove(Guid clientId, Guid classId);
         List<Inscription> GetByClassId(Guid classId);
+        List<Inscription> GetByClientId(Guid clientId);
+        void NullifyClientId(Guid inscriptionId);
+        void RemoveById(Guid inscriptionId);
     }
 }

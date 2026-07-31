@@ -1,15 +1,15 @@
-﻿namespace GymManagement.Domain.Entities
+namespace GymManagement.Domain.Entities
 {
     public class Inscription
     {
-        public Guid ClientId { get; set; }
+        public Guid InscriptionId { get; set; }
+
+        public Guid? ClientId { get; set; }
+
+        public Client? Client { get; set; }
 
         public Guid GymClassId { get; set; }
 
-        public required Client Client { get; set; }
-
         public required GymClass GymClass { get; set; }
-
-        public DateTime ClassDate { get; set; } 
     }
 }

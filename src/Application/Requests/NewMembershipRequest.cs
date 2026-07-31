@@ -1,9 +1,8 @@
-﻿using GymManagement.Domain.Enums;
-
+using System;
 namespace GymManagement.Application.Requests
 {
     public class NewMembershipRequest
     {
-        public MembershipType MembershipType { get; set; }
+        public Guid MembershipPlanId { get; set; }
     }
 }

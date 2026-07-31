@@ -1,4 +1,4 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Persistence;
 

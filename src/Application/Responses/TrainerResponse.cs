@@ -1,4 +1,4 @@
-﻿namespace GymManagement.Application.Responses
+namespace GymManagement.Application.Responses
 {
     public class TrainerResponse : UserResponse
     {

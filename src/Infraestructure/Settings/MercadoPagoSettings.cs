@@ -1,4 +1,4 @@
-﻿namespace GymManagement.Infrastructure.Settings;
+namespace GymManagement.Infrastructure.Settings;
 
 public class MercadoPagoSettings
 {

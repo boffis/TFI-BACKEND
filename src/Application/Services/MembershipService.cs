@@ -1,31 +1,21 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
 
 namespace GymManagement.Application.Services
 {
     public class MembershipService
     {
         private readonly IMembershipRepository _membershipRepository;
-        private readonly IClientRepository _clientRepository;
+        private readonly IMembershipPlanRepository _membershipPlanRepository;
 
-        public MembershipService(IMembershipRepository membershipRepository, IClientRepository clientRepository)
+        public MembershipService(
+            IMembershipRepository membershipRepository,
+            IMembershipPlanRepository membershipPlanRepository)
         {
             _membershipRepository = membershipRepository;
-            _clientRepository = clientRepository;
-        }
-
-        private static int GetDurationDays(MembershipType type)
-        {
-            return type switch
-            {
-                MembershipType.Weekly => 7,
-                MembershipType.Monthly => 30,
-                MembershipType.Annual => 365,
-                _ => 0
-            };
+            _membershipPlanRepository = membershipPlanRepository;
         }
 
         public async Task<List<Membership>> GetAllMemberships()
@@ -34,18 +24,21 @@ namespace GymManagement.Application.Services
         public async Task<Membership?> GetMembershipById(Guid membershipId)
             => await _membershipRepository.GetMembershipById(membershipId);
 
+        public async Task<List<Membership>> GetMembershipsByUserId(Guid userId)
+            => await _membershipRepository.GetByUserId(userId);
+
         public async Task<MembershipResponse> AddMembership(MembershipRequest request)
         {
-            var client = _clientRepository.GetById(request.ClientId)
-                ?? throw new ArgumentException("Cliente no encontrado");
+            var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
+                ?? throw new ArgumentException("Plan de membresía no encontrado");
 
             var membership = new Membership
             {
                 MembershipId = Guid.NewGuid(),
-                ClientId = request.ClientId,
-                Client = client,
-                MembershipType = request.MembershipType,
-                MembershipState = false,
+                UserId = request.UserId,
+                User = null!, // EF Core resolves navigation via FK
+                MembershipPlanId = request.MembershipPlanId,
+                MembershipPlan = plan,
                 ExpirationDate = DateTime.MinValue,
                 IsCancelled = false
             };
@@ -55,9 +48,14 @@ namespace GymManagement.Application.Services
             return new MembershipResponse
             {
                 MembershipId = membership.MembershipId,
-                ClientId = membership.ClientId,
-                MembershipType = membership.MembershipType,
-                MembershipState = membership.MembershipState,
+                UserId = membership.UserId,
+                MembershipPlan = new MembershipPlanResponse
+                {
+                    MembershipPlanId = plan.MembershipPlanId,
+                    Type = plan.Type,
+                    Price = plan.Price,
+                    DurationInDays = plan.DurationInDays
+                },
                 ExpirationDate = membership.ExpirationDate
             };
         }
@@ -67,8 +65,12 @@ namespace GymManagement.Application.Services
             var existingMembership = await _membershipRepository.GetMembershipById(membershipId);
             if (existingMembership == null) return false;
 
-            existingMembership.MembershipType = request.MembershipType;
-            existingMembership.ExpirationDate = DateTime.UtcNow.AddDays(GetDurationDays(request.MembershipType));
+            var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId);
+            if (plan == null) return false;
+
+            existingMembership.MembershipPlanId = request.MembershipPlanId;
+            existingMembership.MembershipPlan = plan;
+            existingMembership.ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays);
 
             await _membershipRepository.ChangeMembership(existingMembership);
             return true;
@@ -77,13 +79,14 @@ namespace GymManagement.Application.Services
         public async Task<bool> ActivateMembershipAsync(Guid membershipId)
         {
             var membership = await _membershipRepository.GetMembershipById(membershipId);
-            if (membership == null) 
+            if (membership == null)
                 return false;
 
-            var durationDays = GetDurationDays(membership.MembershipType);
+            var plan = await _membershipPlanRepository.GetByIdAsync(membership.MembershipPlanId);
+            if (plan == null)
+                return false;
 
-            membership.MembershipState = true;
-            membership.ExpirationDate = DateTime.UtcNow.AddDays(durationDays);
+            membership.ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays);
 
             await _membershipRepository.ChangeMembership(membership);
             return true;
@@ -92,19 +95,11 @@ namespace GymManagement.Application.Services
         public async Task<bool> CancelMembershipAsync(Guid membershipId)
         {
             var membership = await _membershipRepository.GetMembershipById(membershipId);
-            if (membership == null) 
+            if (membership == null)
                 return false;
             membership.IsCancelled = true;
             await _membershipRepository.ChangeMembership(membership);
             return true;
-        }
-
-        public static void CheckMembershipExpiration(Membership membership)
-        {
-            if (DateTime.UtcNow > membership.ExpirationDate)
-            {
-                membership.MembershipState = false;
-            }
         }
     }
 }

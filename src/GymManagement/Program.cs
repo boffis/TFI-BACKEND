@@ -61,7 +61,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddScoped<IGymClassRepository, GymClassRepository>();
 builder.Services.AddScoped<IInscriptionRepository, InscriptionRepository>();
-builder.Services.AddScoped<GymClassService>();
+builder.Services.AddScoped<IGymClassService, GymClassService>();
 
 builder.Services.AddScoped<IGymClassScheduleRepository, GymClassScheduleRepository>();
 builder.Services.AddScoped<GymClassScheduleService>();
@@ -72,7 +72,9 @@ builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<MercadoPagoService>();
 
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
+builder.Services.AddScoped<IMembershipPlanRepository, MembershipPlanRepository>();
 builder.Services.AddScoped<MembershipService>();
+builder.Services.AddScoped<IMembershipPlanService, MembershipPlanService>();
 
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy(Policies.OnlyAdmin, policy => policy.RequireClaim(ClaimTypes.Role, "Admin"))

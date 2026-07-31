@@ -8,8 +8,6 @@ namespace GymManagement.Application.Responses
 
         public required string Email { get; set; }
 
-        public required string Password { get; set; }
-
         public DateOnly DateOfBirth { get; set; }
 
         public required string DNI { get; set; }
@@ -17,7 +15,9 @@ namespace GymManagement.Application.Responses
         public required string Gender { get; set; }
 
         public required string PhoneNumber { get; set; }
-        
+
         public required string Role { get; set; }
+
+        public string? Specialization { get; set; }  
     }
 }

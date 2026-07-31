@@ -15,7 +15,7 @@ namespace GymManagement.Domain.Entities
 
         public Guid TrainerId { get; set; }
 
-        public Trainer? Trainer { get; set; }
+        public User? Trainer { get; set; }
 
         public DayOfWeek DayOfWeek { get; set; }
 

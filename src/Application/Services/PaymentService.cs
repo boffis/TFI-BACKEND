@@ -9,13 +9,11 @@ namespace GymManagement.Application.Services
     public class PaymentService
     {
         private readonly IPaymentRepository _paymentRepository;
-        private readonly IClientRepository _clientRepository;
         private readonly IMembershipRepository _membershipRepository;
 
-        public PaymentService(IPaymentRepository paymentRepository, IClientRepository clientRepository, IMembershipRepository membershipRepository)
+        public PaymentService(IPaymentRepository paymentRepository, IMembershipRepository membershipRepository)
         {
             _paymentRepository = paymentRepository;
-            _clientRepository = clientRepository;
             _membershipRepository = membershipRepository;
         }
 
@@ -23,35 +21,35 @@ namespace GymManagement.Application.Services
 
         public Payment? GetClientPayment(Guid paymentId) => _paymentRepository.GetPaymentById(paymentId);
 
-        //public PaymentResponse? CreatePayment(Guid clientId, PaymentRequest request)
-        //{
-        //    var client = _clientRepository.GetById(clientId) ?? 
-        //        throw new ConflictException("Client not found");
+        public async Task<PaymentResponse> CreatePayment(PaymentRequest request)
+        {
+            var membership = await _membershipRepository.GetMembershipById(request.MembershipId)
+                ?? throw new ConflictException("Membership not found");
 
-        //    var membership = _membershipRepository.GetMembershipById(request.MembershipId) ??
-        //        throw new ConflictException("Membership not found");
+            var newPayment = new Payment
+            {
+                PaymentId = Guid.NewGuid(),
+                UserId = membership.UserId,
+                User = membership.User,
+                MembershipId = request.MembershipId,
+                Membership = membership,
+                Price = request.Price,
+                PaymentDate = DateTime.UtcNow,
+                PaymentMethod = "Mercado Pago",
+                PaymentState = "Pending"
+            };
 
-        //    var newPayment = new Payment
-        //    {
-        //        PaymentId = Guid.NewGuid(),
-        //        MembershipId = request.MembershipId,
-        //        Membership = membership,
-        //        Price = request.Price,
-        //        PaymentDate = DateTime.UtcNow,
-        //        PaymentMethod = "Mercado Pago",
-        //        PaymentState = "Pending"
-        //    };
+            _paymentRepository.AddPayment(newPayment);
 
-        //    _paymentRepository.AddPayment(newPayment);
-
-        //    return new PaymentResponse
-        //    {
-        //        PaymentId = newPayment.PaymentId,
-        //        MembershipId = newPayment.MembershipId,
-        //        Price = newPayment.Price,
-        //        PaymentDate = newPayment.PaymentDate,
-        //        PaymentMethod = newPayment.PaymentMethod
-        //    };
-        //}
+            return new PaymentResponse
+            {
+                PaymentId = newPayment.PaymentId,
+                UserId = newPayment.UserId,
+                MembershipId = newPayment.MembershipId,
+                Price = newPayment.Price,
+                PaymentDate = newPayment.PaymentDate,
+                PaymentMethod = newPayment.PaymentMethod
+            };
+        }
     }
 }

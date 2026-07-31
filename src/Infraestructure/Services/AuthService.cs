@@ -2,7 +2,7 @@ using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
+
 using GymManagement.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
 using GymManagement.Application.Exceptions;
@@ -18,12 +18,14 @@ namespace GymManagement.Infrastructure.Services
         private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
+        private readonly IUserService _userService;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService)
+        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService, IUserService userService)
         {
             _context = context;
             _configuration = configuration;
             _emailService = emailService;
+            _userService = userService;
         }
 
         public async Task<bool> SignUpAsync(UserRequest request, string baseUrl)
@@ -122,7 +124,13 @@ namespace GymManagement.Infrastructure.Services
                 throw new UnauthorizedException("Debes confirmar tu correo electrónico antes de iniciar sesión. Revisa tu casilla de correo.");
             }
 
-            return BuildAuthResponse(user.UserId, user.Email, role);
+            var detailedUser = _userService.GetDetailedById(user.UserId);
+            if (detailedUser == null)
+            {
+                throw new UnauthorizedException("No se pudieron obtener los detalles del usuario.");
+            }
+
+            return BuildAuthResponse(detailedUser, role);
         }
 
         public bool ConfirmEmail(string email, string token)
@@ -229,14 +237,24 @@ namespace GymManagement.Infrastructure.Services
             else if (user is Admin admin) _context.Admins.Remove(admin);
         }
 
-        private AuthResponse BuildAuthResponse(Guid userId, string email, string role)
+        private AuthResponse BuildAuthResponse(UserDetailedResponse detailedUser, string role)
         {
             return new AuthResponse
             {
-                Token = GenerateToken(userId, email, role),
-                Role = role,
-                UserId = userId,
-                Email = email
+                Token = GenerateToken(detailedUser.UserId, detailedUser.Email, role),
+                Role = detailedUser.Role,
+                UserId = detailedUser.UserId,
+                Email = detailedUser.Email,
+                Name = detailedUser.Name,
+                DateOfBirth = detailedUser.DateOfBirth,
+                DNI = detailedUser.DNI,
+                Gender = detailedUser.Gender,
+                PhoneNumber = detailedUser.PhoneNumber,
+                Specialization = detailedUser.Specialization,
+                Payments = detailedUser.Payments,
+                Memberships = detailedUser.Memberships,
+                Inscriptions = detailedUser.Inscriptions,
+                TaughtClasses = detailedUser.TaughtClasses
             };
         }
 

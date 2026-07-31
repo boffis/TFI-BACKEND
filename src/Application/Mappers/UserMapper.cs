@@ -1,7 +1,7 @@
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
+
 
 namespace GymManagement.Application.Mappers
 {
@@ -14,7 +14,6 @@ namespace GymManagement.Application.Mappers
                 UserId = user.UserId,
                 Name = user.Name,
                 Email = user.Email,
-                Password = user.Password,
                 DateOfBirth = user.DateOfBirth,
                 DNI = user.DNI,
                 Gender = user.Gender,

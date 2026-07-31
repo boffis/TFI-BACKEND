@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace GymManagement.Presentation.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     public class GymClassScheduleController : ControllerBase
     {
@@ -22,52 +22,60 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpGet]
+        [Authorize(Policy = Policies.AdminOrTrainer)]
         public IActionResult GetAllSchedules()
         {
-            var schedules = _scheduleService.GetAllSchedules();
+            var role = User.GetUserRole();
+            var schedules = role == "Admin" 
+                ? _scheduleService.GetAllSchedules() 
+                : _scheduleService.GetSchedulesByTrainerId(User.GetUserId());
             return Ok(schedules);
         }
 
         [HttpGet("{id}")]
         public IActionResult GetScheduleById(Guid id)
         {
-            var schedule = _scheduleService.GetScheduleById(id);
-            if (schedule == null) return NotFound();
+            var schedule = _scheduleService.GetAdminScheduleById(id);
             return Ok(schedule);
         }
 
+        [HttpGet("admin/{id}")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public IActionResult GetAdminScheduleById(Guid id)
+        {
+            var result = _scheduleService.GetAdminScheduleById(id);
+            return Ok(result);
+        }
+
         [HttpPost]
-        [Authorize(Policy = Policies.OnlyTrainer)]
+        [Authorize(Policy = Policies.OnlyAdmin)]
         public IActionResult CreateSchedule([FromBody] GymClassScheduleRequest request)
         {
-            var trainerId = User.GetUserId();
-            var result = _scheduleService.CreateSchedule(trainerId, request);
+            var result = _scheduleService.CreateSchedule(request.TrainerId, request);
             return CreatedAtAction(nameof(GetScheduleById), new { id = result.GymClassScheduleId }, result);
         }
 
         [HttpPut("{id}")]
         [Authorize(Policy = Policies.AdminOrTrainer)]
-        public IActionResult ModifySchedule(Guid id, [FromBody] GymClassScheduleRequest request)
+        public IActionResult ModifySchedule(Guid id, [FromBody] GymClassScheduleRequest request, [FromQuery] bool updateUpcomingClasses = false)
         {
-            var success = _scheduleService.ModifySchedule(id, request);
-            if (!success) return NotFound();
+            _scheduleService.ModifySchedule(id, request, User.GetUserId(), User.GetUserRole(), updateUpcomingClasses);
             return NoContent();
         }
 
         [HttpDelete("{id}")]
-        [Authorize(Policy = Policies.OnlyTrainer)]
-        public IActionResult DeleteSchedule(Guid id)
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public IActionResult DeleteSchedule(Guid id, [FromQuery] bool deleteUpcomingClasses = false)
         {
-            var success = _scheduleService.DeleteSchedule(id);
-            if (!success) return NotFound();
+            _scheduleService.DeleteSchedule(id, deleteUpcomingClasses);
             return NoContent();
         }
 
         [HttpPost("generate")]
         [Authorize(Policy = Policies.AdminOrTrainer)]
-        public IActionResult GenerateUpcomingSessions([FromQuery] int weeksAhead = 2)
+        public IActionResult GenerateUpcomingSessions([FromQuery] int daysAhead = 14)
         {
-            var createdClasses = _scheduleService.GenerateUpcomingSessions(weeksAhead);
+            var createdClasses = _scheduleService.GenerateUpcomingSessions(daysAhead);
             return Ok(createdClasses);
         }
     }

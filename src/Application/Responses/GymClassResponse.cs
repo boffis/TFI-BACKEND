@@ -15,5 +15,7 @@ namespace GymManagement.Application.Responses
         public Guid TrainerId { get; set; }
 
         public DateTime Schedule { get; set; }
+
+        public TrainerSummaryResponse? Trainer { get; set; }
     }
 }

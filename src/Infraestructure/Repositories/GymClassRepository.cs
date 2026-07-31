@@ -18,7 +18,7 @@ namespace GymManagement.Infrastructure.Repositories
 
         public List<GymClass> GetAll()
         {
-            return [.. _dbSet.Where(gc => !gc.IsClassDeleted)];
+            return [.. _dbSet.Include(gc => gc.Trainer).Where(gc => !gc.IsClassDeleted)];
         }
 
         public GymClass? GetById(Guid id)

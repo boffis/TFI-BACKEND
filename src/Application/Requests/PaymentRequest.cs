@@ -1,4 +1,4 @@
-﻿namespace GymManagement.Application.Requests
+namespace GymManagement.Application.Requests
 {
     public class PaymentRequest
     {

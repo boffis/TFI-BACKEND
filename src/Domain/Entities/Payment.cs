@@ -1,8 +1,12 @@
-﻿namespace GymManagement.Domain.Entities
+namespace GymManagement.Domain.Entities
 {
     public class Payment
     {
         public Guid PaymentId { get; set; }
+
+        public Guid UserId { get; set; }
+
+        public required User User { get; set; }
 
         public Guid MembershipId { get; set; }
 

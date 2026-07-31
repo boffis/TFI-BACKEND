@@ -1,4 +1,4 @@
-﻿using GymManagement.Application.Interfaces;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
@@ -25,6 +25,11 @@ namespace GymManagement.Infrastructure.Repositories
         public Payment? GetPaymentById(Guid paymentId)
         {
             return _dbSet.FirstOrDefault(p => p.PaymentId == paymentId);
+        }
+
+        public List<Payment> GetPaymentsByUserId(Guid userId)
+        {
+            return _dbSet.Where(p => p.UserId == userId).ToList();
         }
 
         public Payment AddPayment(Payment payment) 

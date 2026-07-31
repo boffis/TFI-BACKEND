@@ -1,4 +1,4 @@
-﻿using GymManagement.Domain.Entities;
+using GymManagement.Domain.Entities;
 
 namespace GymManagement.Application.Interfaces
 {
@@ -7,6 +7,8 @@ namespace GymManagement.Application.Interfaces
         List<Payment> GetAllPayments();
         
         Payment? GetPaymentById(Guid PaymentId);
+
+        List<Payment> GetPaymentsByUserId(Guid userId);
 
         Payment AddPayment(Payment payment);
     }

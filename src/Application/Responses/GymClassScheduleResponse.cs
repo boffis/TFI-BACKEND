@@ -1,5 +1,6 @@
 using System;
 
+
 namespace GymManagement.Application.Responses
 {
     public class GymClassScheduleResponse
@@ -21,5 +22,7 @@ namespace GymManagement.Application.Responses
         public bool IsWeekly { get; set; }
 
         public bool IsActive { get; set; }
+
+        public TrainerSummaryResponse? Trainer { get; set; }
     }
 }

@@ -1,4 +1,3 @@
-using GymManagement.Domain.Enums;
 
 namespace GymManagement.Domain.Entities
 {
@@ -31,5 +30,9 @@ namespace GymManagement.Domain.Entities
         public string? PasswordResetToken { get; set; }
 
         public DateTime? PasswordResetTokenExpiration { get; set; }
+
+        public ICollection<Membership> Memberships { get; set; } = [];
+
+        public ICollection<Payment> Payments { get; set; } = [];
     }
 }

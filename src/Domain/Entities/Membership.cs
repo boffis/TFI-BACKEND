@@ -1,4 +1,3 @@
-﻿using GymManagement.Domain.Enums;
 
 namespace GymManagement.Domain.Entities
 {
@@ -6,13 +5,13 @@ namespace GymManagement.Domain.Entities
     {
         public Guid MembershipId { get; set; }
 
-        public Guid ClientId { get; set; }
+        public Guid UserId { get; set; }
     
-        public required Client Client { get; set; }
+        public required User User { get; set; }
 
-        public MembershipType MembershipType { get; set; }
+        public Guid MembershipPlanId { get; set; }
 
-        public bool MembershipState { get; set; }
+        public required MembershipPlan MembershipPlan { get; set; }
 
         public bool IsCancelled { get; set; } = false;
 

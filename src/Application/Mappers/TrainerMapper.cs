@@ -13,7 +13,6 @@ namespace GymManagement.Application.Mappers
                 UserId = trainer.UserId,
                 Name = trainer.Name,
                 Email = trainer.Email,
-                Password = trainer.Password,
                 DateOfBirth = trainer.DateOfBirth,
                 DNI = trainer.DNI,
                 Gender = trainer.Gender,

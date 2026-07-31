@@ -1,6 +1,5 @@
-﻿using GymManagement.Application.Services;
+using GymManagement.Application.Services;
 using GymManagement.Domain.Entities;
-using GymManagement.Domain.Enums;
 using GymManagement.Infrastructure.Payments;
 using GymManagement.Presentation.Authorization;
 using Microsoft.AspNetCore.Authorization;
@@ -38,9 +37,9 @@ namespace GymManagement.Presentation.Controllers
         
         [HttpPost("CreatePayment")]
         [Authorize(Policy = Policies.OnlyClient)]
-        public async Task<IActionResult> CreatePayment(Guid membershipId, MembershipType membershipType)
+        public async Task<IActionResult> CreatePayment(Guid membershipId)
         {
-            var url = await _mercadoPagoService.CreatePreference(membershipId, membershipType);
+            var url = await _mercadoPagoService.CreatePreference(membershipId);
             return Ok(new { PaymentUrl = url });
         }
 

@@ -1,4 +1,4 @@
-﻿using GymManagement.Application.Requests;
+using GymManagement.Application.Requests;
 using GymManagement.Application.Services;
 using GymManagement.Presentation.Authorization;
 using Microsoft.AspNetCore.Authorization;

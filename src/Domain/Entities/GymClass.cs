@@ -12,7 +12,7 @@ namespace GymManagement.Domain.Entities
 
         public Guid TrainerId { get; set; }
 
-        public required Trainer Trainer { get; set; }
+        public required User Trainer { get; set; }
 
         public required DateTime Schedule { get; set; }
 

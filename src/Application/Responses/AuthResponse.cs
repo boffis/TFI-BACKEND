@@ -1,13 +1,7 @@
-﻿namespace GymManagement.Application.Responses
+namespace GymManagement.Application.Responses
 {
-    public class AuthResponse
+    public class AuthResponse : UserDetailedResponse
     {
-        public Guid UserId { get; set; }
-
-        public string Email { get; set; } = string.Empty;
-
-        public string Role { get; set; } = string.Empty;
-
         public string Token { get; set; } = string.Empty;
     }
 }
