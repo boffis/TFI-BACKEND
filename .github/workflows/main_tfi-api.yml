@@ -62,12 +62,13 @@ jobs:
           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_468EB11C28B448FB8DF2FF314F765611 }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_2058794F4CF84A6B915E1403D4448495 }}
 
-      - name: Install dotnet-ef tools
-        run: dotnet tool install --global dotnet-ef
+      - name: Restore EF Core tools
+        working-directory: ${{ github.workspace }}/src
+        run: dotnet tool restore
 
       - name: Run EF Core migrations
         working-directory: ${{ github.workspace }}/src
-        run: dotnet ef database update --project Infraestructure/GymManagement.Infrastructure.csproj --startup-project GymManagement/GymManagement.Presentation.csproj --connection "${{ secrets.DB_CONNECTION_STRING }}"
+        run: dotnet tool run dotnet-ef database update --project Infraestructure/GymManagement.Infrastructure.csproj --startup-project GymManagement/GymManagement.Presentation.csproj --connection "${{ secrets.DB_CONNECTION_STRING }}"
         env:
           ASPNETCORE_ENVIRONMENT: Production
           ConnectionStrings__GymManagementConnectionString: ${{ secrets.DB_CONNECTION_STRING }}
