@@ -65,6 +65,7 @@ jobs:
         run: dotnet tool install --global dotnet-ef
 
       - name: Run EF Core migrations
+        working-directory: src
         run: dotnet ef database update --project Infraestructure/GymManagement.Infrastructure.csproj --startup-project GymManagement/GymManagement.Presentation.csproj --connection "${{ secrets.DB_CONNECTION_STRING }}"
         env:
           ASPNETCORE_ENVIRONMENT: Production
