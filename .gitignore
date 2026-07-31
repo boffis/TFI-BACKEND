@@ -13,3 +13,4 @@ obj/
 appsettings.Development.json
 appsettings.development.json
 src/GymManagement/appsettings.Development.json
+.env
