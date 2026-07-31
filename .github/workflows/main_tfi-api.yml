@@ -66,6 +66,10 @@ jobs:
         working-directory: ${{ github.workspace }}/src
         run: dotnet tool restore
 
+      - name: Restore dependencies for migrations
+        working-directory: ${{ github.workspace }}/src
+        run: dotnet restore GymManagement.slnx
+
       - name: Run EF Core migrations
         working-directory: ${{ github.workspace }}/src
         run: dotnet ef database update --project Infraestructure/GymManagement.Infrastructure.csproj --startup-project GymManagement/GymManagement.Presentation.csproj --connection "${{ secrets.DB_CONNECTION_STRING }}"
