@@ -282,7 +282,8 @@ namespace GymManagement.Infrastructure.Payments
                 _ => ("days", plan.DurationInDays)
             };
 
-            var clientAppUrl = (_configuration["EmailSettings:ClientAppUrl"] ?? string.Empty).TrimEnd('/');
+            var rawClientAppUrl = _configuration["EmailSettings:ClientAppUrl"];
+            var clientAppUrl = string.IsNullOrWhiteSpace(rawClientAppUrl) ? "https://google.com" : rawClientAppUrl.TrimEnd('/');
 
             var preapprovalRequest = new PreapprovalCreateRequest
             {
@@ -295,10 +296,10 @@ namespace GymManagement.Infrastructure.Payments
                     FrequencyType = frequencyType,
                     TransactionAmount = plan.Price,
                     CurrencyId = "ARS",
-                    StartDate = DateTime.UtcNow.AddMinutes(1),
-                    EndDate = DateTime.UtcNow.AddYears(5)
+                    StartDate = DateTime.UtcNow.AddDays(plan.DurationInDays),
+                    EndDate = DateTime.UtcNow.AddYears(3)
                 },
-                BackUrl = string.IsNullOrWhiteSpace(clientAppUrl) ? null : clientAppUrl,
+                BackUrl = clientAppUrl,
                 Status = "authorized"
             };
 
