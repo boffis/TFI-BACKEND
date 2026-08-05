@@ -22,12 +22,14 @@ namespace GymManagement.Infrastructure.Payments
     {
         private readonly MercadoPagoSettings _settings;
         private readonly ApplicationDbContext _context;
+        private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
 
-        public MercadoPagoService(IOptions<MercadoPagoSettings> settings, ApplicationDbContext context)
+        public MercadoPagoService(IOptions<MercadoPagoSettings> settings, ApplicationDbContext context, Microsoft.Extensions.Configuration.IConfiguration configuration)
         {
             _settings = settings.Value;
             _context = context;
-            MercadoPagoConfig.AccessToken = _settings.AccessToken;
+            _configuration = configuration;
+            MercadoPagoConfig.AccessToken = _settings.AccessToken?.Trim();
         }
 
         // ─── Signature Validation ───────────────────────────────────────────────────
@@ -97,6 +99,8 @@ namespace GymManagement.Infrastructure.Payments
 
             var price = membership.MembershipPlan.Price;
 
+            var clientAppUrl = (_configuration["EmailSettings:ClientAppUrl"] ?? string.Empty).TrimEnd('/');
+
             var request = new PreferenceRequest
             {
                 Items = new List<PreferenceItemRequest>
@@ -111,9 +115,9 @@ namespace GymManagement.Infrastructure.Payments
                 },
                 BackUrls = new PreferenceBackUrlsRequest
                 {
-                    Success = "https://tugym.com/api/payments/success",
-                    Failure = "https://tugym.com/api/payments/failure",
-                    Pending = "https://tugym.com/api/payments/pending"
+                    Success = clientAppUrl,
+                    Failure = clientAppUrl,
+                    Pending = clientAppUrl
                 },
                 AutoReturn = "approved"
             };
@@ -252,7 +256,7 @@ namespace GymManagement.Infrastructure.Payments
             membership.IsCancelled = false;
             membership.ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays);
 
-            // Record the initial payment
+            // Record the initial payment locally
             var localPayment = new Payment
             {
                 PaymentId = Guid.NewGuid(),
@@ -278,6 +282,8 @@ namespace GymManagement.Infrastructure.Payments
                 _ => ("days", plan.DurationInDays)
             };
 
+            var clientAppUrl = (_configuration["EmailSettings:ClientAppUrl"] ?? string.Empty).TrimEnd('/');
+
             var preapprovalRequest = new PreapprovalCreateRequest
             {
                 Reason = $"Membresía {plan.Type} - Gym Management",
@@ -288,9 +294,11 @@ namespace GymManagement.Infrastructure.Payments
                     Frequency = frequencyValue,
                     FrequencyType = frequencyType,
                     TransactionAmount = plan.Price,
-                    CurrencyId = "ARS"
+                    CurrencyId = "ARS",
+                    StartDate = DateTime.UtcNow.AddMinutes(1),
+                    EndDate = DateTime.UtcNow.AddYears(5)
                 },
-                BackUrl = "https://tugym.com/subscription/status",
+                BackUrl = string.IsNullOrWhiteSpace(clientAppUrl) ? null : clientAppUrl,
                 Status = "authorized"
             };
 
@@ -304,6 +312,7 @@ namespace GymManagement.Infrastructure.Payments
             catch (MercadoPago.Error.MercadoPagoApiException apiEx)
             {
                 var errorDetail = apiEx.ApiResponse?.Content ?? apiEx.Message;
+                // Log/include warning if preapproval creation has specific parameters issue
                 throw new ValidationException($"Error al suscribir en Mercado Pago: {errorDetail}");
             }
             catch (Exception ex) when (ex.GetType().Namespace?.StartsWith("MercadoPago") == true)
@@ -312,7 +321,6 @@ namespace GymManagement.Infrastructure.Payments
             }
 
             membership.MpPreapprovalId = preapprovalId;
-
             await _context.SaveChangesAsync();
 
             return new
