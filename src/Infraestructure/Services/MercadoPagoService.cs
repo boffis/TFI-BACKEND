@@ -12,6 +12,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace GymManagement.Infrastructure.Payments
@@ -26,6 +28,57 @@ namespace GymManagement.Infrastructure.Payments
             _settings = settings.Value;
             _context = context;
             MercadoPagoConfig.AccessToken = _settings.AccessToken;
+        }
+
+        // ─── Signature Validation ───────────────────────────────────────────────────
+
+        /// <summary>
+        /// Validates the x-signature header sent by Mercado Pago using HMAC-SHA256 and WebhookSecret.
+        /// Returns true if valid, or if WebhookSecret is empty (local dev bypass).
+        /// </summary>
+        public bool ValidateWebhookSignature(string? xSignature, string? requestId, string? dataId)
+        {
+            if (string.IsNullOrWhiteSpace(_settings.WebhookSecret))
+            {
+                // Secret not configured (e.g. local development), bypass check
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(xSignature) || string.IsNullOrWhiteSpace(dataId))
+            {
+                return false;
+            }
+
+            try
+            {
+                string? ts = null;
+                string? v1 = null;
+
+                var parts = xSignature.Split(',');
+                foreach (var part in parts)
+                {
+                    var keyValue = part.Trim().Split('=', 2);
+                    if (keyValue.Length == 2)
+                    {
+                        if (keyValue[0] == "ts") ts = keyValue[1];
+                        if (keyValue[0] == "v1") v1 = keyValue[1];
+                    }
+                }
+
+                if (string.IsNullOrEmpty(ts) || string.IsNullOrEmpty(v1)) return false;
+
+                var manifest = $"id:{dataId};request-id:{requestId ?? ""};ts:{ts};";
+
+                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_settings.WebhookSecret));
+                var hashBytes = hmac.ComputeHash(Encoding.UTF8.GetBytes(manifest));
+                var hashHex = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+                return hashHex.Equals(v1, StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         // ─── Legacy redirect-based flow (kept for reference) ────────────────────────

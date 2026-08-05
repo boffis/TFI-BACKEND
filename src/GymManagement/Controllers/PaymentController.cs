@@ -50,6 +50,7 @@ namespace GymManagement.Presentation.Controllers
         /// <summary>
         /// Mercado Pago Webhook notification endpoint.
         /// Publicly accessible (no JWT required) so Mercado Pago can post notifications.
+        /// Validates x-signature header if WebhookSecret is configured.
         /// Supports both JSON payload and Query string notifications (Webhooks & IPN).
         /// </summary>
         [HttpPost("webhook")]
@@ -61,12 +62,20 @@ namespace GymManagement.Presentation.Controllers
             [FromQuery] string? topic,
             [FromQuery] string? id)
         {
-            // Determine resource type and resource ID from JSON body or Query String
             string? resourceType = body?.Type ?? body?.Topic ?? type ?? topic;
             string? resourceId = body?.Data?.Id ?? dataId ?? id ?? body?.Id?.ToString();
 
+            string? xSignature = Request.Headers["x-signature"].ToString();
+            string? requestId = Request.Headers["x-request-id"].ToString();
+
             if (!string.IsNullOrEmpty(resourceId))
             {
+                // Validate HMAC-SHA256 signature if WebhookSecret is configured
+                if (!_mercadoPagoService.ValidateWebhookSignature(xSignature, requestId, resourceId))
+                {
+                    return Unauthorized("Firma de webhook inválida.");
+                }
+
                 await _mercadoPagoService.ProcessWebhookNotificationAsync(resourceType, resourceId);
             }
 
