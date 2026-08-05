@@ -172,6 +172,16 @@ namespace GymManagement.Infrastructure.Payments
         /// </summary>
         public async Task<object> CreateSubscriptionAsync(SubscriptionRequest request, Guid userId)
         {
+            if (string.IsNullOrWhiteSpace(request.PaymentMethodId))
+            {
+                throw new ValidationException("El campo 'payment_method_id' es requerido.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Token))
+            {
+                throw new ValidationException("El campo 'token' de tarjeta es requerido.");
+            }
+
             var plan = await _context.MembershipPlans
                 .FirstOrDefaultAsync(p => p.MembershipPlanId == request.MembershipPlanId)
                 ?? throw new NotFoundException($"Plan {request.MembershipPlanId} no encontrado.");
@@ -181,7 +191,7 @@ namespace GymManagement.Infrastructure.Payments
             {
                 TransactionAmount = plan.Price,
                 Token = request.Token,
-                IssuerId = request.IssuerId,
+                IssuerId = string.IsNullOrWhiteSpace(request.IssuerId) ? null : request.IssuerId,
                 PaymentMethodId = request.PaymentMethodId,
                 Installments = 1,
                 Description = $"Membresía {plan.Type} - Gym Management",
@@ -197,12 +207,25 @@ namespace GymManagement.Infrastructure.Payments
                 }
             };
 
-            var paymentClient = new PaymentClient();
-            var mpPayment = await paymentClient.CreateAsync(paymentCreateRequest);
+            MercadoPago.Resource.Payment.Payment mpPayment;
+            try
+            {
+                var paymentClient = new PaymentClient();
+                mpPayment = await paymentClient.CreateAsync(paymentCreateRequest);
+            }
+            catch (MercadoPago.Error.MercadoPagoApiException apiEx)
+            {
+                var errorDetail = apiEx.ApiResponse?.Content ?? apiEx.Message;
+                throw new ValidationException($"Error de Mercado Pago: {errorDetail}");
+            }
+            catch (Exception ex) when (ex.GetType().Namespace?.StartsWith("MercadoPago") == true)
+            {
+                throw new ValidationException($"Error al procesar el pago con Mercado Pago: {ex.Message}");
+            }
 
             if (mpPayment.Status != "approved")
             {
-                throw new Exception($"El pago fue rechazado. Estado: {mpPayment.Status}. Detalle: {mpPayment.StatusDetail}");
+                throw new ValidationException($"El pago fue rechazado. Estado: {mpPayment.Status}. Detalle: {mpPayment.StatusDetail}");
             }
 
             // ── Step 2: Activate the membership locally ────────────────────────────
@@ -271,16 +294,30 @@ namespace GymManagement.Infrastructure.Payments
                 Status = "authorized"
             };
 
-            var preapprovalClient = new PreapprovalClient();
-            var preapproval = await preapprovalClient.CreateAsync(preapprovalRequest);
+            string? preapprovalId = null;
+            try
+            {
+                var preapprovalClient = new PreapprovalClient();
+                var preapproval = await preapprovalClient.CreateAsync(preapprovalRequest);
+                preapprovalId = preapproval.Id;
+            }
+            catch (MercadoPago.Error.MercadoPagoApiException apiEx)
+            {
+                var errorDetail = apiEx.ApiResponse?.Content ?? apiEx.Message;
+                throw new ValidationException($"Error al suscribir en Mercado Pago: {errorDetail}");
+            }
+            catch (Exception ex) when (ex.GetType().Namespace?.StartsWith("MercadoPago") == true)
+            {
+                throw new ValidationException($"Error al crear la suscripción en Mercado Pago: {ex.Message}");
+            }
 
-            membership.MpPreapprovalId = preapproval.Id;
+            membership.MpPreapprovalId = preapprovalId;
 
             await _context.SaveChangesAsync();
 
             return new
             {
-                preapprovalId = preapproval.Id,
+                preapprovalId = preapprovalId,
                 paymentStatus = mpPayment.Status,
                 membershipId = membership.MembershipId,
                 expirationDate = membership.ExpirationDate
