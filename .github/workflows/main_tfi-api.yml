@@ -93,6 +93,11 @@ jobs:
                 "name": "EmailSettings__Password",
                 "value": "${{ secrets.EMAIL_APPLICATION_PASSWORD }}",
                 "slotSetting": false
+              },
+              {
+                "name": "EmailSettings__ClientAppUrl",
+                "value": "${{ secrets.EMAIL_CLIENT_APP_URL }}",
+                "slotSetting": false
               }
             ]
 

@@ -2,10 +2,9 @@ using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
-
-using GymManagement.Infrastructure.Persistence;
-using Microsoft.Extensions.Configuration;
+using GymManagement.Application.Mappers;
 using GymManagement.Application.Exceptions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
@@ -15,22 +14,29 @@ namespace GymManagement.Infrastructure.Services
 {
     public class AuthService : IAuthService
     {
-        private readonly ApplicationDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
         private readonly IUserService _userService;
+        private readonly IUserRepository _userRepository;
+        private readonly IClientRepository _clientRepository;
 
-        public AuthService(ApplicationDbContext context, IConfiguration configuration, IEmailService emailService, IUserService userService)
+        public AuthService(
+            IConfiguration configuration, 
+            IEmailService emailService, 
+            IUserService userService, 
+            IUserRepository userRepository,
+            IClientRepository clientRepository)
         {
-            _context = context;
             _configuration = configuration;
             _emailService = emailService;
             _userService = userService;
+            _userRepository = userRepository;
+            _clientRepository = clientRepository;
         }
 
         public async Task<bool> SignUpAsync(UserRequest request, string baseUrl)
         {
-            User? existingUser = GetUserByEmail(request.Email);
+            User? existingUser = _userRepository.GetUserByEmail(request.Email);
 
             if (existingUser != null)
             {
@@ -43,14 +49,12 @@ namespace GymManagement.Infrastructure.Services
                 if (existingUser.EmailConfirmationTokenExpiration.HasValue &&
                     existingUser.EmailConfirmationTokenExpiration.Value < DateTime.UtcNow)
                 {
-                    RemoveUser(existingUser);
-                    _context.SaveChanges();
+                    _userRepository.RemoveUser(existingUser);
                 }
                 else
                 {
                     // Unconfirmed user exists and token is still valid. Delete existing draft to re-issue
-                    RemoveUser(existingUser);
-                    _context.SaveChanges();
+                    _userRepository.RemoveUser(existingUser);
                 }
             }
 
@@ -73,8 +77,7 @@ namespace GymManagement.Infrastructure.Services
                 EmailConfirmationTokenExpiration = DateTime.UtcNow.AddHours(48)
             };
 
-            _context.Clients.Add(client);
-            _context.SaveChanges();
+            _clientRepository.Add(client);
 
             string clientAppUrl = _configuration["EmailSettings:ClientAppUrl"] ?? "http://localhost:5173";
             string confirmUrl = $"{clientAppUrl}/confirm-email?email={Uri.EscapeDataString(request.Email)}&token={token}";
@@ -96,7 +99,7 @@ namespace GymManagement.Infrastructure.Services
 
         public AuthResponse? SignIn(SignInRequest request)
         {
-            User? user = GetUserByEmail(request.Email);
+            User? user = _userRepository.GetUserByEmail(request.Email);
             string? role = null;
 
             if (user != null && BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
@@ -116,8 +119,7 @@ namespace GymManagement.Infrastructure.Services
                 if (user.EmailConfirmationTokenExpiration.HasValue &&
                     user.EmailConfirmationTokenExpiration.Value < DateTime.UtcNow)
                 {
-                    RemoveUser(user);
-                    _context.SaveChanges();
+                    _userRepository.RemoveUser(user);
                     throw new UnauthorizedException("El plazo de 48 horas para confirmar tu email ha expirado y tu cuenta fue eliminada. Por favor regístrate nuevamente.");
                 }
 
@@ -130,12 +132,13 @@ namespace GymManagement.Infrastructure.Services
                 throw new UnauthorizedException("No se pudieron obtener los detalles del usuario.");
             }
 
-            return BuildAuthResponse(detailedUser, role);
+            string token = GenerateToken(detailedUser.UserId, detailedUser.Email, role);
+            return AuthMapper.ToAuthResponse(detailedUser, role, token);
         }
 
         public bool ConfirmEmail(string email, string token)
         {
-            User? user = GetUserByEmail(email);
+            User? user = _userRepository.GetUserByEmail(email);
 
             if (user == null || user.EmailConfirmationToken != token)
             {
@@ -145,22 +148,22 @@ namespace GymManagement.Infrastructure.Services
             if (user.EmailConfirmationTokenExpiration.HasValue &&
                 user.EmailConfirmationTokenExpiration.Value < DateTime.UtcNow)
             {
-                RemoveUser(user);
-                _context.SaveChanges();
+                _userRepository.RemoveUser(user);
                 return false;
             }
 
             user.IsEmailConfirmed = true;
             user.EmailConfirmationToken = null;
             user.EmailConfirmationTokenExpiration = null;
-            _context.SaveChanges();
+            
+            _userRepository.UpdateUser(user);
 
             return true;
         }
 
         public async Task<bool> ForgotPasswordAsync(ForgotPasswordRequest request)
         {
-            User? user = GetUserByEmail(request.Email);
+            User? user = _userRepository.GetUserByEmail(request.Email);
 
             if (user == null || !user.IsEmailConfirmed || user.IsUserDeleted)
             {
@@ -171,7 +174,8 @@ namespace GymManagement.Infrastructure.Services
             string token = Guid.NewGuid().ToString("N");
             user.PasswordResetToken = token;
             user.PasswordResetTokenExpiration = DateTime.UtcNow.AddHours(2);
-            _context.SaveChanges();
+            
+            _userRepository.UpdateUser(user);
 
             string clientAppUrl = _configuration["EmailSettings:ClientAppUrl"] ?? "http://localhost:5173";
             string resetUrl = $"{clientAppUrl}/reset-password?email={Uri.EscapeDataString(user.Email)}&token={token}";
@@ -193,7 +197,7 @@ namespace GymManagement.Infrastructure.Services
 
         public bool ResetPassword(ResetPasswordRequest request)
         {
-            User? user = GetUserByEmail(request.Email);
+            User? user = _userRepository.GetUserByEmail(request.Email);
 
             if (user == null || user.IsUserDeleted || !user.IsEmailConfirmed || user.PasswordResetToken != request.Token)
             {
@@ -204,58 +208,17 @@ namespace GymManagement.Infrastructure.Services
             {
                 user.PasswordResetToken = null;
                 user.PasswordResetTokenExpiration = null;
-                _context.SaveChanges();
+                _userRepository.UpdateUser(user);
                 return false;
             }
 
             user.Password = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
             user.PasswordResetToken = null;
             user.PasswordResetTokenExpiration = null;
-            _context.SaveChanges();
+            
+            _userRepository.UpdateUser(user);
 
             return true;
-        }
-
-        private User? GetUserByEmail(string email)
-        {
-            Client? client = _context.Clients.FirstOrDefault(c => c.Email == email && !c.IsUserDeleted);
-            if (client != null) return client;
-
-            Trainer? trainer = _context.Trainers.FirstOrDefault(t => t.Email == email && !t.IsUserDeleted);
-            if (trainer != null) return trainer;
-
-            Admin? admin = _context.Admins.FirstOrDefault(a => a.Email == email && !a.IsUserDeleted);
-            if (admin != null) return admin;
-
-            return null;
-        }
-
-        private void RemoveUser(User user)
-        {
-            if (user is Client client) _context.Clients.Remove(client);
-            else if (user is Trainer trainer) _context.Trainers.Remove(trainer);
-            else if (user is Admin admin) _context.Admins.Remove(admin);
-        }
-
-        private AuthResponse BuildAuthResponse(UserDetailedResponse detailedUser, string role)
-        {
-            return new AuthResponse
-            {
-                Token = GenerateToken(detailedUser.UserId, detailedUser.Email, role),
-                Role = detailedUser.Role,
-                UserId = detailedUser.UserId,
-                Email = detailedUser.Email,
-                Name = detailedUser.Name,
-                DateOfBirth = detailedUser.DateOfBirth,
-                DNI = detailedUser.DNI,
-                Gender = detailedUser.Gender,
-                PhoneNumber = detailedUser.PhoneNumber,
-                Specialization = detailedUser.Specialization,
-                Payments = detailedUser.Payments,
-                Memberships = detailedUser.Memberships,
-                Inscriptions = detailedUser.Inscriptions,
-                TaughtClasses = detailedUser.TaughtClasses
-            };
         }
 
         private string GenerateToken(Guid userId, string email, string role)

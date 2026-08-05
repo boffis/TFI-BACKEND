@@ -17,6 +17,11 @@ namespace GymManagement.Domain.Entities
 
         public DateTime ExpirationDate { get; set; }
 
+        /// <summary>
+        /// Mercado Pago Preapproval ID. Stored when the user subscribes so we can cancel it later.
+        /// </summary>
+        public string? MpPreapprovalId { get; set; }
+
         public ICollection<Payment> Payments { get; set; } = [];
     }
 }

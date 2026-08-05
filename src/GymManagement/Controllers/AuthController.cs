@@ -27,7 +27,7 @@ namespace GymManagement.Presentation.Controllers
             return Ok(new { message = "Registro exitoso. Se ha enviado un correo de confirmación a tu casilla de email. Por favor confírmalo antes de iniciar sesión." });
         }
 
-        [HttpGet("ConfirmEmail")]
+        [HttpPost("ConfirmEmail")]
         public IActionResult ConfirmEmail([FromQuery] string email, [FromQuery] string token)
         {
             bool success = _authService.ConfirmEmail(email, token);
