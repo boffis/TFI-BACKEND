@@ -16,11 +16,16 @@ namespace GymManagement.Presentation.Controllers
     {
         private readonly PaymentService _paymentService;
         private readonly MercadoPagoService _mercadoPagoService;
+        private readonly IServiceScopeFactory _scopeFactory;
 
-        public PaymentController(PaymentService paymentService, MercadoPagoService mercadoPagoService)
+        public PaymentController(
+            PaymentService paymentService,
+            MercadoPagoService mercadoPagoService,
+            IServiceScopeFactory scopeFactory)
         {
             _paymentService = paymentService;
             _mercadoPagoService = mercadoPagoService;
+            _scopeFactory = scopeFactory;
         }
 
         [HttpGet("GetAllPayments")]
@@ -52,10 +57,12 @@ namespace GymManagement.Presentation.Controllers
         /// Publicly accessible (no JWT required) so Mercado Pago can post notifications.
         /// Validates x-signature header if WebhookSecret is configured.
         /// Supports both JSON payload and Query string notifications (Webhooks & IPN).
+        /// Returns 200 immediately to acknowledge receipt, then processes the notification
+        /// in the background using a dedicated DI scope to avoid DbContext disposal issues.
         /// </summary>
         [HttpPost("webhook")]
         [AllowAnonymous]
-        public async Task<IActionResult> WebhookMercadoPago(
+        public IActionResult WebhookMercadoPago(
             [FromBody] MercadoPagoWebhookRequest? body,
             [FromQuery] string? type,
             [FromQuery(Name = "data.id")] string? dataId,
@@ -76,7 +83,15 @@ namespace GymManagement.Presentation.Controllers
                     return Unauthorized("Firma de webhook inválida.");
                 }
 
-                await _mercadoPagoService.ProcessWebhookNotificationAsync(resourceType, resourceId);
+                // Fire-and-forget: process in background so MP gets 200 immediately.
+                // A new DI scope is created for the background work so that the scoped
+                // MercadoPagoService (and its DbContext) are not disposed with this request.
+                _ = Task.Run(async () =>
+                {
+                    await using var scope = _scopeFactory.CreateAsyncScope();
+                    var svc = scope.ServiceProvider.GetRequiredService<MercadoPagoService>();
+                    await svc.ProcessWebhookNotificationAsync(resourceType, resourceId);
+                });
             }
 
             // Always respond HTTP 200 OK immediately to acknowledge receipt to Mercado Pago

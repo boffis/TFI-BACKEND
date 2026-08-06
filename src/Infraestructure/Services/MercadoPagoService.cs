@@ -316,6 +316,9 @@ namespace GymManagement.Infrastructure.Payments
         /// <summary>
         /// Cancels a recurring subscription both in Mercado Pago and locally.
         /// Only the owner of the membership may cancel it (userId is validated here).
+        /// Uses the named "MercadoPago" HttpClient which has a Polly retry policy
+        /// (up to 5 retries with exponential backoff on transient HTTP errors).
+        /// IsCancelled is only set to true once Mercado Pago confirms the cancellation.
         /// </summary>
         public async Task CancelSubscriptionAsync(Guid membershipId, Guid userId)
         {
@@ -331,15 +334,28 @@ namespace GymManagement.Infrastructure.Payments
 
             if (!string.IsNullOrEmpty(membership.MpPreapprovalId))
             {
-                var updateRequest = new PreapprovalUpdateRequest
-                {
-                    Status = "cancelled"
-                };
+                // Use the named HttpClient which carries the Polly retry policy.
+                // We call the MP REST API directly (PATCH /preapproval/{id}) because the SDK
+                // does not support the retry pipeline. On any non-2xx after 5 attempts, this throws.
+                var http = _httpClientFactory.CreateClient("MercadoPago");
+                http.DefaultRequestHeaders.Clear();
+                http.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.AccessToken?.Trim()}");
 
-                var preapprovalClient = new PreapprovalClient();
-                await preapprovalClient.UpdateAsync(membership.MpPreapprovalId, updateRequest);
+                var body = JsonSerializer.Serialize(new { status = "cancelled" });
+                var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+                var response = await http.PatchAsync(
+                    $"https://api.mercadopago.com/preapproval/{membership.MpPreapprovalId}",
+                    content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    throw new Exception($"Mercado Pago no pudo cancelar la suscripción: {error}");
+                }
             }
 
+            // Only mark as cancelled locally after MP confirmed the cancellation above.
             membership.IsCancelled = true;
             await _context.SaveChangesAsync();
         }
@@ -394,21 +410,41 @@ namespace GymManagement.Infrastructure.Payments
                                 ? DateTime.UtcNow.AddDays(membership.MembershipPlan.DurationInDays)
                                 : membership.ExpirationDate.AddDays(membership.MembershipPlan.DurationInDays);
 
-                            var payment = new Payment
-                            {
-                                PaymentId = Guid.NewGuid(),
-                                UserId = userId,
-                                User = null!,
-                                MembershipId = membership.MembershipId,
-                                Membership = null!,
-                                Price = mpPayment.TransactionAmount ?? membership.MembershipPlan.Price,
-                                PaymentDate = DateTime.UtcNow,
-                                PaymentMethod = mpPayment.PaymentMethodId ?? "MercadoPago",
-                                PaymentState = mpPayment.Status,
-                                MpPaymentId = resourceId
-                            };
+                            // Try to find the existing pending payment for this membership
+                            // (created locally when the subscription was initiated) and update it.
+                            // This avoids duplicate records — we update in place instead of inserting a new one.
+                            var pendingPayment = await _context.Payments
+                                .FirstOrDefaultAsync(p =>
+                                    p.MembershipId == membership.MembershipId &&
+                                    p.PaymentState == "pending");
 
-                            _context.Payments.Add(payment);
+                            if (pendingPayment != null)
+                            {
+                                pendingPayment.PaymentState = mpPayment.Status;
+                                pendingPayment.MpPaymentId = resourceId;
+                                pendingPayment.PaymentDate = DateTime.UtcNow;
+                                pendingPayment.PaymentMethod = mpPayment.PaymentMethodId ?? pendingPayment.PaymentMethod;
+                                pendingPayment.Price = mpPayment.TransactionAmount ?? pendingPayment.Price;
+                            }
+                            else
+                            {
+                                // No pending record found (edge case): insert a new payment
+                                var payment = new Payment
+                                {
+                                    PaymentId = Guid.NewGuid(),
+                                    UserId = userId,
+                                    User = null!,
+                                    MembershipId = membership.MembershipId,
+                                    Membership = null!,
+                                    Price = mpPayment.TransactionAmount ?? membership.MembershipPlan.Price,
+                                    PaymentDate = DateTime.UtcNow,
+                                    PaymentMethod = mpPayment.PaymentMethodId ?? "MercadoPago",
+                                    PaymentState = mpPayment.Status,
+                                    MpPaymentId = resourceId
+                                };
+                                _context.Payments.Add(payment);
+                            }
+
                             await _context.SaveChangesAsync();
                         }
                     }

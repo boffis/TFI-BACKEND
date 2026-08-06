@@ -13,6 +13,8 @@ using GymManagement.Infrastructure.Settings;
 using GymManagement.Infrastructure.Payments;
 using GymManagement.Presentation.Authorization;
 using GymManagement.Presentation.Middlewares;
+using Polly;
+using Polly.Extensions.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -70,7 +72,23 @@ builder.Services.AddScoped<GymClassScheduleService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<PaymentService>();
 
+// Default HttpClient (used by CreateSubscriptionAsync via IHttpClientFactory.CreateClient())
 builder.Services.AddHttpClient();
+
+// Named HttpClient for Mercado Pago cancellation with Polly retry policy:
+// Retries up to 10 times on transient HTTP errors (5xx, 408) with exponential backoff.
+builder.Services.AddHttpClient("MercadoPago")
+    .AddPolicyHandler(HttpPolicyExtensions
+        .HandleTransientHttpError()   // 5xx + 408
+        .WaitAndRetryAsync(
+            retryCount: 5,
+            sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
+            onRetry: (outcome, timespan, attempt, _) =>
+            {
+                // Log retry attempts (visible in Azure App Service logs)
+                Console.WriteLine($"[MercadoPago] Retry {attempt} after {timespan.TotalSeconds:F1}s — {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}");
+            }));
+
 builder.Services.AddScoped<MercadoPagoService>();
 
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
