@@ -70,6 +70,7 @@ builder.Services.AddScoped<GymClassScheduleService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<PaymentService>();
 
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<MercadoPagoService>();
 
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();

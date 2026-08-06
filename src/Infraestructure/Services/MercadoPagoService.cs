@@ -12,8 +12,10 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace GymManagement.Infrastructure.Payments
@@ -23,12 +25,18 @@ namespace GymManagement.Infrastructure.Payments
         private readonly MercadoPagoSettings _settings;
         private readonly ApplicationDbContext _context;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
+        private readonly IHttpClientFactory _httpClientFactory;
 
-        public MercadoPagoService(IOptions<MercadoPagoSettings> settings, ApplicationDbContext context, Microsoft.Extensions.Configuration.IConfiguration configuration)
+        public MercadoPagoService(
+            IOptions<MercadoPagoSettings> settings,
+            ApplicationDbContext context,
+            Microsoft.Extensions.Configuration.IConfiguration configuration,
+            IHttpClientFactory httpClientFactory)
         {
             _settings = settings.Value;
             _context = context;
             _configuration = configuration;
+            _httpClientFactory = httpClientFactory;
             MercadoPagoConfig.AccessToken = _settings.AccessToken?.Trim();
         }
 
@@ -190,49 +198,69 @@ namespace GymManagement.Infrastructure.Payments
                 .FirstOrDefaultAsync(p => p.MembershipPlanId == request.MembershipPlanId)
                 ?? throw new NotFoundException($"Plan {request.MembershipPlanId} no encontrado.");
 
-            // ── Step 1: Charge the card immediately ────────────────────────────────
-            var paymentCreateRequest = new PaymentCreateRequest
+            // ── Step 1: Create Preapproval (subscription) in Mercado Pago via raw HTTP ──
+            // The SDK v3.3.0 is missing card_token_id on PreapprovalCreateRequest,
+            // so we call the API directly with HttpClient to include all required fields.
+            var (frequencyType, frequencyValue) = plan.DurationInDays switch
             {
-                TransactionAmount = plan.Price,
-                Token = request.Token,
-                IssuerId = string.IsNullOrWhiteSpace(request.IssuerId) ? null : request.IssuerId,
-                PaymentMethodId = request.PaymentMethodId,
-                Installments = 1,
-                Description = $"Membresía {plan.Type} - Gym Management",
-                ExternalReference = userId.ToString(),
-                Payer = new PaymentPayerRequest
+                7 => ("days", 7),
+                30 => ("months", 1),
+                365 => ("months", 12),
+                _ => ("days", plan.DurationInDays)
+            };
+
+            var rawClientAppUrl = _configuration["EmailSettings:ClientAppUrl"];
+            var clientAppUrl = string.IsNullOrWhiteSpace(rawClientAppUrl) ? "https://google.com" : rawClientAppUrl.TrimEnd('/');
+
+            var preapprovalBody = new
+            {
+                back_url = clientAppUrl,
+                reason = $"Membresía {plan.Type} - Gym Management",
+                external_reference = userId.ToString(),
+                payer_email = request.Payer.Email,
+                card_token_id = request.Token,
+                status = "authorized",
+                auto_recurring = new
                 {
-                    Email = request.Payer.Email,
-                    Identification = new IdentificationRequest
-                    {
-                        Type = request.Payer.Identification.Type,
-                        Number = request.Payer.Identification.Number
-                    }
+                    frequency = frequencyValue,
+                    frequency_type = frequencyType,
+                    start_date = DateTime.UtcNow.AddDays(plan.DurationInDays).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                    end_date = DateTime.UtcNow.AddYears(3).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                    transaction_amount = plan.Price,
+                    currency_id = "ARS"
                 }
             };
 
-            MercadoPago.Resource.Payment.Payment mpPayment;
+            string? preapprovalId = null;
             try
             {
-                var paymentClient = new PaymentClient();
-                mpPayment = await paymentClient.CreateAsync(paymentCreateRequest);
-            }
-            catch (MercadoPago.Error.MercadoPagoApiException apiEx)
-            {
-                var errorDetail = apiEx.ApiResponse?.Content ?? apiEx.Message;
-                throw new ValidationException($"Error de Mercado Pago: {errorDetail}");
-            }
-            catch (Exception ex) when (ex.GetType().Namespace?.StartsWith("MercadoPago") == true)
-            {
-                throw new ValidationException($"Error al procesar el pago con Mercado Pago: {ex.Message}");
-            }
+                var http = _httpClientFactory.CreateClient();
+                var json = JsonSerializer.Serialize(preapprovalBody);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+                http.DefaultRequestHeaders.Clear();
+                http.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.AccessToken?.Trim()}");
 
-            if (mpPayment.Status != "approved")
+                var response = await http.PostAsync("https://api.mercadopago.com/preapproval", content);
+                var responseBody = await response.Content.ReadAsStringAsync();
+
+                if (!response.IsSuccessStatusCode)
+                    throw new ValidationException($"Error al suscribir en Mercado Pago: {responseBody}");
+
+                using var doc = JsonDocument.Parse(responseBody);
+                preapprovalId = doc.RootElement.GetProperty("id").GetString();
+            }
+            catch (ValidationException)
             {
-                throw new ValidationException($"El pago fue rechazado. Estado: {mpPayment.Status}. Detalle: {mpPayment.StatusDetail}");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new ValidationException($"Error al crear la suscripción en Mercado Pago: {ex.Message}");
             }
 
             // ── Step 2: Activate the membership locally ────────────────────────────
+            // MP automatically charges the card within 1 hour of subscription creation.
+            // We record the membership and a pending payment locally.
             var membership = await _context.Memberships
                 .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
 
@@ -254,9 +282,11 @@ namespace GymManagement.Infrastructure.Payments
             }
 
             membership.IsCancelled = false;
+            membership.MpPreapprovalId = preapprovalId;
+            // ExpirationDate will be updated by webhook when MP confirms the payment.
+            // Set a provisional expiration based on plan duration.
             membership.ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays);
 
-            // Record the initial payment locally
             var localPayment = new Payment
             {
                 PaymentId = Guid.NewGuid(),
@@ -267,67 +297,17 @@ namespace GymManagement.Infrastructure.Payments
                 Price = plan.Price,
                 PaymentDate = DateTime.UtcNow,
                 PaymentMethod = request.PaymentMethodId,
-                PaymentState = mpPayment.Status ?? "approved",
-                MpPaymentId = mpPayment.Id?.ToString()
+                PaymentState = "pending",
+                MpPaymentId = preapprovalId
             };
 
             _context.Payments.Add(localPayment);
-
-            // ── Step 3: Create recurring Preapproval in Mercado Pago ──────────────
-            var (frequencyType, frequencyValue) = plan.DurationInDays switch
-            {
-                7 => ("days", 7),
-                30 => ("months", 1),
-                365 => ("months", 12),
-                _ => ("days", plan.DurationInDays)
-            };
-
-            var rawClientAppUrl = _configuration["EmailSettings:ClientAppUrl"];
-            var clientAppUrl = string.IsNullOrWhiteSpace(rawClientAppUrl) ? "https://google.com" : rawClientAppUrl.TrimEnd('/');
-
-            var preapprovalRequest = new PreapprovalCreateRequest
-            {
-                Reason = $"Membresía {plan.Type} - Gym Management",
-                ExternalReference = userId.ToString(),
-                PayerEmail = request.Payer.Email,
-                AutoRecurring = new PreApprovalAutoRecurringCreateRequest
-                {
-                    Frequency = frequencyValue,
-                    FrequencyType = frequencyType,
-                    TransactionAmount = plan.Price,
-                    CurrencyId = "ARS",
-                    StartDate = DateTime.UtcNow.AddDays(plan.DurationInDays),
-                    EndDate = DateTime.UtcNow.AddYears(3)
-                },
-                BackUrl = clientAppUrl,
-                Status = "authorized"
-            };
-
-            string? preapprovalId = null;
-            try
-            {
-                var preapprovalClient = new PreapprovalClient();
-                var preapproval = await preapprovalClient.CreateAsync(preapprovalRequest);
-                preapprovalId = preapproval.Id;
-            }
-            catch (MercadoPago.Error.MercadoPagoApiException apiEx)
-            {
-                var errorDetail = apiEx.ApiResponse?.Content ?? apiEx.Message;
-                // Log/include warning if preapproval creation has specific parameters issue
-                throw new ValidationException($"Error al suscribir en Mercado Pago: {errorDetail}");
-            }
-            catch (Exception ex) when (ex.GetType().Namespace?.StartsWith("MercadoPago") == true)
-            {
-                throw new ValidationException($"Error al crear la suscripción en Mercado Pago: {ex.Message}");
-            }
-
-            membership.MpPreapprovalId = preapprovalId;
             await _context.SaveChangesAsync();
 
             return new
             {
                 preapprovalId = preapprovalId,
-                paymentStatus = mpPayment.Status,
+                paymentStatus = "pending",
                 membershipId = membership.MembershipId,
                 expirationDate = membership.ExpirationDate
             };
