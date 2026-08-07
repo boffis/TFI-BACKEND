@@ -351,8 +351,13 @@ namespace GymManagement.Infrastructure.Payments
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    var error = await response.Content.ReadAsStringAsync();
-                    throw new Exception($"Mercado Pago no pudo cancelar la suscripción: {error}");
+                    // 404 means the preapproval no longer exists in MP (e.g. test data, already cancelled
+                    // externally, or expired). Treat as success — nothing left to cancel on MP's side.
+                    if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
+                    {
+                        var error = await response.Content.ReadAsStringAsync();
+                        throw new Exception($"Mercado Pago no pudo cancelar la suscripción: {error}");
+                    }
                 }
             }
 
