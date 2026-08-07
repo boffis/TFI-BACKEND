@@ -13,5 +13,7 @@ namespace GymManagement.Application.Responses
         public DateTime PaymentDate { get; set; }
 
         public string PaymentMethod { get; set; } = string.Empty;
+
+        public string PaymentState { get; set; } = string.Empty;
     }
 }

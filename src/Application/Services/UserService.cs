@@ -109,7 +109,8 @@ namespace GymManagement.Application.Services
                     MembershipId = p.MembershipId,
                     Price = p.Price,
                     PaymentDate = p.PaymentDate,
-                    PaymentMethod = p.PaymentMethod
+                    PaymentMethod = p.PaymentMethod,
+                    PaymentState = p.PaymentState
                 }).ToList(),
                 Memberships = _membershipRepository.GetByUserId(id).Result.Select(m => new MembershipResponse
                 {

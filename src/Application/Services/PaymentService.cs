@@ -48,7 +48,8 @@ namespace GymManagement.Application.Services
                 MembershipId = newPayment.MembershipId,
                 Price = newPayment.Price,
                 PaymentDate = newPayment.PaymentDate,
-                PaymentMethod = newPayment.PaymentMethod
+                PaymentMethod = newPayment.PaymentMethod,
+                PaymentState = newPayment.PaymentState
             };
         }
     }
