@@ -351,12 +351,18 @@ namespace GymManagement.Infrastructure.Payments
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    // 404 means the preapproval no longer exists in MP (e.g. test data, already cancelled
-                    // externally, or expired). Treat as success — nothing left to cancel on MP's side.
-                    if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
+                    var error = await response.Content.ReadAsStringAsync();
+
+                    // MP may return 404 or sometimes a 400/other code with "resource not found" in the body
+                    // when the preapproval no longer exists. In both cases, nothing is left to cancel on MP's
+                    // side so we treat it as success and proceed with local cancellation.
+                    bool resourceGone = response.StatusCode == System.Net.HttpStatusCode.NotFound
+                        || error.Contains("resource not found", StringComparison.OrdinalIgnoreCase);
+
+                    if (!resourceGone)
                     {
-                        var error = await response.Content.ReadAsStringAsync();
-                        throw new Exception($"Mercado Pago no pudo cancelar la suscripción: {error}");
+                        throw new Exception(
+                            $"Mercado Pago no pudo cancelar la suscripción (HTTP {(int)response.StatusCode}): {error}");
                     }
                 }
             }
