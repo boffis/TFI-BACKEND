@@ -391,13 +391,14 @@ namespace GymManagement.Infrastructure.Payments
             {
                 if (!long.TryParse(resourceId, out long mpPaymentId)) return;
 
-                // Idempotency check: has this payment already been processed?
+                // Idempotency check: skip only if this payment was already fully processed.
+                // If it exists but is still "pending", fall through so its status gets updated.
                 var existingPayment = await _context.Payments
                     .FirstOrDefaultAsync(p => p.MpPaymentId == resourceId);
 
-                if (existingPayment != null)
+                if (existingPayment != null && existingPayment.PaymentState == "approved")
                 {
-                    // Payment already recorded
+                    // Already processed — nothing to do.
                     return;
                 }
 
@@ -424,11 +425,14 @@ namespace GymManagement.Infrastructure.Payments
 
                             // Try to find the existing pending payment for this membership
                             // (created locally when the subscription was initiated) and update it.
+                            // Also fall back to existingPayment (matched by MpPaymentId) if no
+                            // membership-scoped pending record is found.
                             // This avoids duplicate records — we update in place instead of inserting a new one.
                             var pendingPayment = await _context.Payments
                                 .FirstOrDefaultAsync(p =>
                                     p.MembershipId == membership.MembershipId &&
-                                    p.PaymentState == "pending");
+                                    p.PaymentState == "pending")
+                                ?? existingPayment;
 
                             if (pendingPayment != null)
                             {
@@ -440,7 +444,7 @@ namespace GymManagement.Infrastructure.Payments
                             }
                             else
                             {
-                                // No pending record found (edge case): insert a new payment
+                                // No existing record found at all: insert a new payment
                                 var payment = new Payment
                                 {
                                     PaymentId = Guid.NewGuid(),
