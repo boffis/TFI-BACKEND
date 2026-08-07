@@ -215,6 +215,7 @@ namespace GymManagement.Infrastructure.Payments
             var preapprovalBody = new
             {
                 back_url = clientAppUrl,
+                notification_url = string.IsNullOrWhiteSpace(_settings.WebhookUrl) ? null : _settings.WebhookUrl,
                 reason = $"Membresía {plan.Type} - Gym Management",
                 external_reference = userId.ToString(),
                 payer_email = request.Payer.Email,

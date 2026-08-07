@@ -113,6 +113,11 @@ jobs:
                 "name": "MercadoPago__WebhookSecret",
                 "value": "${{ secrets.MP_WEBHOOK_SECRET }}",
                 "slotSetting": false
+              },
+              {
+                "name": "MercadoPago__WebhookUrl",
+                "value": "${{ secrets.MP_WEBHOOK_URL }}",
+                "slotSetting": false
               }
             ]
 
