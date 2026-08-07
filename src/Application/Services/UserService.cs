@@ -123,7 +123,8 @@ namespace GymManagement.Application.Services
                         Type = m.MembershipPlan.Type,
                         Price = m.MembershipPlan.Price,
                         DurationInDays = m.MembershipPlan.DurationInDays
-                    }
+                    },
+                    IsCancelled = m.IsCancelled
                 }).ToList()
             };
 

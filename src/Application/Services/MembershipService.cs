@@ -56,7 +56,8 @@ namespace GymManagement.Application.Services
                     Price = plan.Price,
                     DurationInDays = plan.DurationInDays
                 },
-                ExpirationDate = membership.ExpirationDate
+                ExpirationDate = membership.ExpirationDate,
+                IsCancelled = membership.IsCancelled
             };
         }
 

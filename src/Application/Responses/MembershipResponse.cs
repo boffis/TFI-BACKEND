@@ -10,5 +10,7 @@ namespace GymManagement.Application.Responses
         public required MembershipPlanResponse MembershipPlan { get; set; }
 
         public DateTime ExpirationDate { get; set; }
+
+        public bool IsCancelled { get; set; }
     }
 }
