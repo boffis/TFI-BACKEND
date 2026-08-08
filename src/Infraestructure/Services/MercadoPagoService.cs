@@ -9,6 +9,7 @@ using MercadoPago.Client.Preference;
 using MercadoPago.Client.Preapproval;
 using MercadoPago.Config;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
@@ -26,17 +27,20 @@ namespace GymManagement.Infrastructure.Payments
         private readonly ApplicationDbContext _context;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<MercadoPagoService> _logger;
 
         public MercadoPagoService(
             IOptions<MercadoPagoSettings> settings,
             ApplicationDbContext context,
             Microsoft.Extensions.Configuration.IConfiguration configuration,
-            IHttpClientFactory httpClientFactory)
+            IHttpClientFactory httpClientFactory,
+            ILogger<MercadoPagoService> logger)
         {
             _settings = settings.Value;
             _context = context;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
             MercadoPagoConfig.AccessToken = _settings.AccessToken?.Trim();
         }
 
@@ -407,6 +411,28 @@ namespace GymManagement.Infrastructure.Payments
 
             resourceType = resourceType?.ToLowerInvariant();
 
+            // This method runs fire-and-forget from a background Task.Run (the controller
+            // already returned 200 to Mercado Pago by the time this executes), so an
+            // unhandled exception here would otherwise vanish silently — no retry from MP,
+            // no error anywhere. Log it so failures are actually visible in App Service logs.
+            try
+            {
+                await ProcessWebhookNotificationCoreAsync(resourceType, resourceId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "[MercadoPago Webhook] Unhandled error processing {ResourceType} {ResourceId}",
+                    resourceType, resourceId);
+            }
+        }
+
+        private async Task ProcessWebhookNotificationCoreAsync(string? resourceType, string resourceId)
+        {
+            _logger.LogInformation(
+                "[MercadoPago Webhook] Received {ResourceType} notification for resource {ResourceId}",
+                resourceType, resourceId);
+
             if (resourceType == "payment" || resourceType == "subscription_authorized_payment")
             {
                 if (!long.TryParse(resourceId, out long mpPaymentId)) return;
@@ -447,10 +473,33 @@ namespace GymManagement.Infrastructure.Payments
                         membership = await _context.Memberships
                             .Include(m => m.MembershipPlan)
                             .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
+
+                        if (membership != null)
+                            _logger.LogInformation(
+                                "[MercadoPago Webhook] Payment {PaymentId} matched membership {MembershipId} via ExternalReference",
+                                resourceId, membership.MembershipId);
                     }
 
-                    // Fallback: subscription payments may not carry ExternalReference.
-                    // Look up by payer email → user → membership, or search preapprovals.
+                    // Fallback: recurring/auto-charged subscription payments often don't carry
+                    // ExternalReference. Mercado Pago attaches the preapproval (subscription) id
+                    // to the payment itself, so match it against the membership's MpPreapprovalId.
+                    if (membership == null)
+                    {
+                        var subscriptionId = mpPayment.PointOfInteraction?.TransactionData?.SubscriptionId;
+                        if (!string.IsNullOrWhiteSpace(subscriptionId))
+                        {
+                            membership = await _context.Memberships
+                                .Include(m => m.MembershipPlan)
+                                .FirstOrDefaultAsync(m => m.MpPreapprovalId == subscriptionId);
+
+                            if (membership != null)
+                                _logger.LogInformation(
+                                    "[MercadoPago Webhook] Payment {PaymentId} matched membership {MembershipId} via subscription_id {SubscriptionId}",
+                                    resourceId, membership.MembershipId, subscriptionId);
+                        }
+                    }
+
+                    // Last-resort fallback: look up by payer email → user → membership.
                     if (membership == null)
                     {
                         // Try to find by payer email → local user → active membership
@@ -464,8 +513,20 @@ namespace GymManagement.Infrastructure.Payments
                                 membership = await _context.Memberships
                                     .Include(m => m.MembershipPlan)
                                     .FirstOrDefaultAsync(m => m.UserId == user.UserId && !m.IsCancelled);
+
+                                if (membership != null)
+                                    _logger.LogWarning(
+                                        "[MercadoPago Webhook] Payment {PaymentId} matched membership {MembershipId} via payer email fallback — ExternalReference and subscription_id both missed",
+                                        resourceId, membership.MembershipId);
                             }
                         }
+                    }
+
+                    if (membership == null)
+                    {
+                        _logger.LogError(
+                            "[MercadoPago Webhook] Approved payment {PaymentId} (amount {Amount}) could not be matched to any membership — money was collected but no local record will reflect it",
+                            resourceId, mpPayment.TransactionAmount);
                     }
 
                     if (membership != null && membership.MembershipPlan != null)
@@ -515,6 +576,57 @@ namespace GymManagement.Infrastructure.Payments
                         await _context.SaveChangesAsync();
                     }
                 }
+                else if (mpPayment.Status == "rejected" || mpPayment.Status == "cancelled")
+                {
+                    // The charge was denied. CreateSubscriptionAsync grants membership access
+                    // optimistically as soon as the preapproval is authorized, before Mercado Pago
+                    // actually attempts the real charge — if that charge is then denied, the
+                    // membership must not be left silently active as if it had been paid.
+                    // Only ExternalReference / subscription id are used here (not the payer-email
+                    // fallback): revoking access is destructive, so we only act on precise matches.
+                    Membership? membership = null;
+
+                    if (Guid.TryParse(mpPayment.ExternalReference, out Guid userId))
+                    {
+                        membership = await _context.Memberships
+                            .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
+                    }
+
+                    if (membership == null)
+                    {
+                        var subscriptionId = mpPayment.PointOfInteraction?.TransactionData?.SubscriptionId;
+                        if (!string.IsNullOrWhiteSpace(subscriptionId))
+                        {
+                            membership = await _context.Memberships
+                                .FirstOrDefaultAsync(m => m.MpPreapprovalId == subscriptionId && !m.IsCancelled);
+                        }
+                    }
+
+                    if (membership != null)
+                    {
+                        // Only revoke if this was the membership's initiating charge (still
+                        // "pending" locally) — it was never actually paid for. A denied renewal
+                        // charge on an already-paid membership is a separate concern and is left
+                        // alone here.
+                        var pendingPayment = await _context.Payments
+                            .FirstOrDefaultAsync(p =>
+                                p.MembershipId == membership.MembershipId &&
+                                p.PaymentState == "pending");
+
+                        if (pendingPayment != null)
+                        {
+                            pendingPayment.PaymentState = mpPayment.Status;
+                            pendingPayment.MpPaymentId = resourceId;
+                            membership.IsCancelled = true;
+
+                            await _context.SaveChangesAsync();
+
+                            _logger.LogWarning(
+                                "[MercadoPago Webhook] Payment {PaymentId} for membership {MembershipId} was {Status} — membership access revoked",
+                                resourceId, membership.MembershipId, mpPayment.Status);
+                        }
+                    }
+                }
             }
             else if (resourceType == "subscription_preapproval" || resourceType == "preapproval")
             {
@@ -538,6 +650,16 @@ namespace GymManagement.Infrastructure.Payments
                     }
 
                     await _context.SaveChangesAsync();
+
+                    _logger.LogInformation(
+                        "[MercadoPago Webhook] Preapproval {PreapprovalId} status {Status} synced to membership {MembershipId} (IsCancelled={IsCancelled})",
+                        resourceId, preapproval.Status, membership.MembershipId, membership.IsCancelled);
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "[MercadoPago Webhook] Preapproval {PreapprovalId} status {Status} — no membership found with matching MpPreapprovalId",
+                        resourceId, preapproval.Status);
                 }
             }
         }
