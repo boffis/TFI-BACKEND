@@ -215,7 +215,8 @@ namespace GymManagement.Infrastructure.Payments
             var preapprovalBody = new
             {
                 back_url = clientAppUrl,
-                notification_url = string.IsNullOrWhiteSpace(_settings.WebhookUrl) ? null : _settings.WebhookUrl,
+                // notification_url is NOT supported for preapprovals — configure it
+                // in the Mercado Pago Developer Dashboard instead.
                 reason = $"Membresía {plan.Type} - Gym Management",
                 external_reference = userId.ToString(),
                 payer_email = request.Payer.Email,
@@ -225,7 +226,8 @@ namespace GymManagement.Infrastructure.Payments
                 {
                     frequency = frequencyValue,
                     frequency_type = frequencyType,
-                    start_date = DateTime.UtcNow.AddDays(plan.DurationInDays).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
+                    // No start_date → MP charges the first installment immediately
+                    // (within ~1 hour of subscription creation).
                     end_date = DateTime.UtcNow.AddYears(3).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
                     transaction_amount = plan.Price,
                     currency_id = "ARS"
@@ -259,11 +261,29 @@ namespace GymManagement.Infrastructure.Payments
                 throw new ValidationException($"Error al crear la suscripción en Mercado Pago: {ex.Message}");
             }
 
-            // ── Step 2: Activate the membership locally ────────────────────────────
-            // MP automatically charges the card within 1 hour of subscription creation.
-            // We record the membership and a pending payment locally.
+            // ── Step 2: Cancel any previous preapproval in MP to avoid duplicates ────
             var membership = await _context.Memberships
                 .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
+
+            if (membership != null && !string.IsNullOrEmpty(membership.MpPreapprovalId))
+            {
+                try
+                {
+                    var cancelHttp = _httpClientFactory.CreateClient();
+                    cancelHttp.DefaultRequestHeaders.Clear();
+                    cancelHttp.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.AccessToken?.Trim()}");
+                    var cancelBody = JsonSerializer.Serialize(new { status = "cancelled" });
+                    var cancelContent = new StringContent(cancelBody, Encoding.UTF8, "application/json");
+                    await cancelHttp.PutAsync(
+                        $"https://api.mercadopago.com/preapproval/{membership.MpPreapprovalId}",
+                        cancelContent);
+                }
+                catch { /* best-effort: if old preapproval is already gone, ignore */ }
+            }
+
+            // ── Step 3: Activate the membership locally ────────────────────────────
+            // MP automatically charges the card within 1 hour of subscription creation.
+            // We record the membership and a pending payment locally.
 
             if (membership == null)
             {
@@ -336,7 +356,7 @@ namespace GymManagement.Infrastructure.Payments
             if (!string.IsNullOrEmpty(membership.MpPreapprovalId))
             {
                 // Use the named HttpClient which carries the Polly retry policy.
-                // We call the MP REST API directly (PATCH /preapproval/{id}) because the SDK
+                // We call the MP REST API directly (PUT /preapproval/{id}) because the SDK
                 // does not support the retry pipeline. On any non-2xx after 5 attempts, this throws.
                 var http = _httpClientFactory.CreateClient("MercadoPago");
                 http.DefaultRequestHeaders.Clear();
@@ -345,7 +365,7 @@ namespace GymManagement.Infrastructure.Payments
                 var body = JsonSerializer.Serialize(new { status = "cancelled" });
                 var content = new StringContent(body, Encoding.UTF8, "application/json");
 
-                var response = await http.PatchAsync(
+                var response = await http.PutAsync(
                     $"https://api.mercadopago.com/preapproval/{membership.MpPreapprovalId}",
                     content);
 
@@ -408,61 +428,91 @@ namespace GymManagement.Infrastructure.Payments
 
                 if (mpPayment == null) return;
 
+                // Skip $0 card-validation charges — they are not real payments.
+                if (mpPayment.OperationType == "card_validation"
+                    || (mpPayment.TransactionAmount.HasValue && mpPayment.TransactionAmount.Value == 0))
+                {
+                    return;
+                }
+
                 if (mpPayment.Status == "approved")
                 {
+                    // Try to find the membership:
+                    // 1) Via ExternalReference on the payment (userId)
+                    // 2) Fallback: via the preapproval ID stored on the membership
+                    Membership? membership = null;
+
                     if (Guid.TryParse(mpPayment.ExternalReference, out Guid userId))
                     {
-                        var membership = await _context.Memberships
+                        membership = await _context.Memberships
                             .Include(m => m.MembershipPlan)
                             .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
+                    }
 
-                        if (membership != null && membership.MembershipPlan != null)
+                    // Fallback: subscription payments may not carry ExternalReference.
+                    // Look up by payer email → user → membership, or search preapprovals.
+                    if (membership == null)
+                    {
+                        // Try to find by payer email → local user → active membership
+                        var payerEmail = mpPayment.Payer?.Email;
+                        if (!string.IsNullOrWhiteSpace(payerEmail))
                         {
-                            // Extend membership expiration
-                            membership.ExpirationDate = DateTime.UtcNow > membership.ExpirationDate
-                                ? DateTime.UtcNow.AddDays(membership.MembershipPlan.DurationInDays)
-                                : membership.ExpirationDate.AddDays(membership.MembershipPlan.DurationInDays);
-
-                            // Try to find the existing pending payment for this membership
-                            // (created locally when the subscription was initiated) and update it.
-                            // Also fall back to existingPayment (matched by MpPaymentId) if no
-                            // membership-scoped pending record is found.
-                            // This avoids duplicate records — we update in place instead of inserting a new one.
-                            var pendingPayment = await _context.Payments
-                                .FirstOrDefaultAsync(p =>
-                                    p.MembershipId == membership.MembershipId &&
-                                    p.PaymentState == "pending")
-                                ?? existingPayment;
-
-                            if (pendingPayment != null)
+                            var user = await _context.Clients
+                                .FirstOrDefaultAsync(u => u.Email == payerEmail);
+                            if (user != null)
                             {
-                                pendingPayment.PaymentState = mpPayment.Status;
-                                pendingPayment.MpPaymentId = resourceId;
-                                pendingPayment.PaymentDate = DateTime.UtcNow;
-                                pendingPayment.PaymentMethod = mpPayment.PaymentMethodId ?? pendingPayment.PaymentMethod;
-                                pendingPayment.Price = mpPayment.TransactionAmount ?? pendingPayment.Price;
+                                membership = await _context.Memberships
+                                    .Include(m => m.MembershipPlan)
+                                    .FirstOrDefaultAsync(m => m.UserId == user.UserId && !m.IsCancelled);
                             }
-                            else
-                            {
-                                // No existing record found at all: insert a new payment
-                                var payment = new Payment
-                                {
-                                    PaymentId = Guid.NewGuid(),
-                                    UserId = userId,
-                                    User = null!,
-                                    MembershipId = membership.MembershipId,
-                                    Membership = null!,
-                                    Price = mpPayment.TransactionAmount ?? membership.MembershipPlan.Price,
-                                    PaymentDate = DateTime.UtcNow,
-                                    PaymentMethod = mpPayment.PaymentMethodId ?? "MercadoPago",
-                                    PaymentState = mpPayment.Status,
-                                    MpPaymentId = resourceId
-                                };
-                                _context.Payments.Add(payment);
-                            }
-
-                            await _context.SaveChangesAsync();
                         }
+                    }
+
+                    if (membership != null && membership.MembershipPlan != null)
+                    {
+                        // Extend membership expiration
+                        membership.ExpirationDate = DateTime.UtcNow > membership.ExpirationDate
+                            ? DateTime.UtcNow.AddDays(membership.MembershipPlan.DurationInDays)
+                            : membership.ExpirationDate.AddDays(membership.MembershipPlan.DurationInDays);
+
+                        // Try to find the existing pending payment for this membership
+                        // (created locally when the subscription was initiated) and update it.
+                        // Also fall back to existingPayment (matched by MpPaymentId) if no
+                        // membership-scoped pending record is found.
+                        var pendingPayment = await _context.Payments
+                            .FirstOrDefaultAsync(p =>
+                                p.MembershipId == membership.MembershipId &&
+                                p.PaymentState == "pending")
+                            ?? existingPayment;
+
+                        if (pendingPayment != null)
+                        {
+                            pendingPayment.PaymentState = mpPayment.Status;
+                            pendingPayment.MpPaymentId = resourceId;
+                            pendingPayment.PaymentDate = DateTime.UtcNow;
+                            pendingPayment.PaymentMethod = mpPayment.PaymentMethodId ?? pendingPayment.PaymentMethod;
+                            pendingPayment.Price = mpPayment.TransactionAmount ?? pendingPayment.Price;
+                        }
+                        else
+                        {
+                            // No existing record found at all: insert a new payment
+                            var payment = new Payment
+                            {
+                                PaymentId = Guid.NewGuid(),
+                                UserId = membership.UserId,
+                                User = null!,
+                                MembershipId = membership.MembershipId,
+                                Membership = null!,
+                                Price = mpPayment.TransactionAmount ?? membership.MembershipPlan.Price,
+                                PaymentDate = DateTime.UtcNow,
+                                PaymentMethod = mpPayment.PaymentMethodId ?? "MercadoPago",
+                                PaymentState = mpPayment.Status,
+                                MpPaymentId = resourceId
+                            };
+                            _context.Payments.Add(payment);
+                        }
+
+                        await _context.SaveChangesAsync();
                     }
                 }
             }
