@@ -640,13 +640,16 @@ namespace GymManagement.Infrastructure.Payments
 
                 if (membership != null)
                 {
+                    // Only ever revoke here, never re-grant: an "authorized" preapproval just means
+                    // the recurring billing agreement is still valid, NOT that the most recent charge
+                    // succeeded — Mercado Pago keeps retrying a preapproval even after a declined
+                    // charge, so treating "authorized" as "un-cancel" would undo the revocation from
+                    // a rejected-payment webhook (see the payment.status == rejected/cancelled branch
+                    // above) whenever the two notifications race. There is no reactivate/resume
+                    // feature in this app that depends on the opposite transition.
                     if (preapproval.Status == "cancelled" || preapproval.Status == "paused")
                     {
                         membership.IsCancelled = true;
-                    }
-                    else if (preapproval.Status == "authorized")
-                    {
-                        membership.IsCancelled = false;
                     }
 
                     await _context.SaveChangesAsync();
