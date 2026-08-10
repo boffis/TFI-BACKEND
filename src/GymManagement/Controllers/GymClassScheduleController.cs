@@ -35,7 +35,7 @@ namespace GymManagement.Presentation.Controllers
         [HttpGet("{id}")]
         public IActionResult GetScheduleById(Guid id)
         {
-            var schedule = _scheduleService.GetAdminScheduleById(id);
+            var schedule = _scheduleService.GetPublicScheduleById(id);
             return Ok(schedule);
         }
 

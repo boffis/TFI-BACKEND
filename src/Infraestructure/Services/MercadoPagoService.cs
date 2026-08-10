@@ -394,6 +394,30 @@ namespace GymManagement.Infrastructure.Payments
             // Only mark as cancelled locally after MP confirmed the cancellation above.
             membership.IsCancelled = true;
             await _context.SaveChangesAsync();
+            await RemoveFutureInscriptionsAsync(membership.UserId);
+        }
+
+        /// <summary>
+        /// Removes a client's inscriptions to gym classes that haven't happened yet.
+        /// Called whenever a membership becomes cancelled (self-service cancel, declined
+        /// payment, or a Mercado Pago preapproval cancellation) so a client without an
+        /// active membership doesn't stay booked into future classes.
+        /// </summary>
+        private async Task RemoveFutureInscriptionsAsync(Guid userId)
+        {
+            var futureInscriptions = await _context.Inscriptions
+                .Include(i => i.GymClass)
+                .Where(i => i.ClientId == userId && i.GymClass.Schedule >= DateTime.UtcNow)
+                .ToListAsync();
+
+            if (futureInscriptions.Count == 0) return;
+
+            _context.Inscriptions.RemoveRange(futureInscriptions);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation(
+                "[MercadoPago] Removed {Count} future inscription(s) for user {UserId} after membership cancellation",
+                futureInscriptions.Count, userId);
         }
 
         // ─── Webhook Notification Processing ─────────────────────────────────────────
@@ -620,6 +644,7 @@ namespace GymManagement.Infrastructure.Payments
                             membership.IsCancelled = true;
 
                             await _context.SaveChangesAsync();
+                            await RemoveFutureInscriptionsAsync(membership.UserId);
 
                             _logger.LogWarning(
                                 "[MercadoPago Webhook] Payment {PaymentId} for membership {MembershipId} was {Status} — membership access revoked",
@@ -647,12 +672,20 @@ namespace GymManagement.Infrastructure.Payments
                     // a rejected-payment webhook (see the payment.status == rejected/cancelled branch
                     // above) whenever the two notifications race. There is no reactivate/resume
                     // feature in this app that depends on the opposite transition.
-                    if (preapproval.Status == "cancelled" || preapproval.Status == "paused")
+                    bool justCancelled = !membership.IsCancelled &&
+                        (preapproval.Status == "cancelled" || preapproval.Status == "paused");
+
+                    if (justCancelled)
                     {
                         membership.IsCancelled = true;
                     }
 
                     await _context.SaveChangesAsync();
+
+                    if (justCancelled)
+                    {
+                        await RemoveFutureInscriptionsAsync(membership.UserId);
+                    }
 
                     _logger.LogInformation(
                         "[MercadoPago Webhook] Preapproval {PreapprovalId} status {Status} synced to membership {MembershipId} (IsCancelled={IsCancelled})",

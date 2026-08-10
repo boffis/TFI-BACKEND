@@ -61,7 +61,32 @@ namespace GymManagement.Application.Services
             var gymClass = _gymClassRepository.GetById(classId)
                 ?? throw new NotFoundException("Clase no encontrada");
 
-            var inscriptions = _inscriptionRepository.GetByClassId(classId);
+            return BuildClassDetailResponse(gymClass, includeClientNames: true);
+        }
+
+        /// <summary>
+        /// Detail lookup for the client-facing class page. Unlike <see cref="GetAdminClassById"/>:
+        /// - classes that have already happened are treated as not found — clients shouldn't be able
+        ///   to open the detail page (or book) a class whose time has passed.
+        /// - other clients' names/emails are never included. The caller only needs a total count
+        ///   (to show spots left) and whether *they themselves* are inscribed.
+        /// </summary>
+        public GymClassDetailResponse GetPublicClassById(Guid classId, Guid requestingUserId)
+        {
+            var gymClass = _gymClassRepository.GetById(classId)
+                ?? throw new NotFoundException("Clase no encontrada");
+
+            if (gymClass.Schedule < DateTime.UtcNow)
+                throw new NotFoundException("Clase no encontrada");
+
+            var response = BuildClassDetailResponse(gymClass, includeClientNames: false);
+            response.IsCurrentUserInscribed = _inscriptionRepository.IsUserRepeated(requestingUserId, classId);
+            return response;
+        }
+
+        private GymClassDetailResponse BuildClassDetailResponse(GymClass gymClass, bool includeClientNames)
+        {
+            var inscriptions = _inscriptionRepository.GetByClassId(gymClass.GymClassId);
 
             return new GymClassDetailResponse
             {
@@ -77,12 +102,15 @@ namespace GymManagement.Application.Services
                     Name = gymClass.Trainer?.Name ?? string.Empty,
                     Specialization = gymClass.Trainer is Trainer t ? t.Specialization : null
                 },
-                InscribedClients = inscriptions.Where(i => i.Client != null).Select(i => new ClientSummaryResponse
-                {
-                    ClientId = i.ClientId ?? Guid.Empty,
-                    Name = i.Client!.Name,
-                    Email = i.Client.Email
-                }).ToList()
+                InscribedClients = includeClientNames
+                    ? inscriptions.Where(i => i.Client != null).Select(i => new ClientSummaryResponse
+                    {
+                        ClientId = i.ClientId ?? Guid.Empty,
+                        Name = i.Client!.Name,
+                        Email = i.Client.Email
+                    }).ToList()
+                    : [],
+                InscriptionCount = inscriptions.Count
             };
         }
 
@@ -110,7 +138,7 @@ namespace GymManagement.Application.Services
             }).ToList();
 
             var specialClasses = _gymClassRepository.GetAll()
-                .Where(gc => gc.GymClassScheduleId == null)
+                .Where(gc => gc.GymClassScheduleId == null && gc.Schedule >= DateTime.UtcNow)
                 .Select(gc => new GymClassResponse
                 {
                     GymClassId = gc.GymClassId,

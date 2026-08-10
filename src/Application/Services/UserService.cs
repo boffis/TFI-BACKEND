@@ -1,4 +1,5 @@
 using GymManagement.Application.Interfaces;
+using GymManagement.Application.Common;
 using GymManagement.Application.Mappers;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
@@ -172,7 +173,7 @@ namespace GymManagement.Application.Services
             var user = GetUserEntityById(id);
             if (user == null) return false;
 
-            user.Name = request.Name;
+            user.Name = TextFormatter.ToTitleCase(request.Name);
             user.Email = request.Email;
             user.DateOfBirth = request.DateOfBirth;
             user.DNI = request.DNI;

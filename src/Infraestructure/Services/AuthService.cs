@@ -2,6 +2,7 @@ using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
+using GymManagement.Application.Common;
 using GymManagement.Application.Mappers;
 using GymManagement.Application.Exceptions;
 using Microsoft.Extensions.Configuration;
@@ -65,7 +66,7 @@ namespace GymManagement.Infrastructure.Services
             var client = new Client
             {
                 UserId = newId,
-                Name = request.Name,
+                Name = TextFormatter.ToTitleCase(request.Name),
                 Email = request.Email,
                 Password = hashedPassword,
                 DateOfBirth = request.DateOfBirth,
@@ -84,7 +85,7 @@ namespace GymManagement.Infrastructure.Services
             string htmlBody = $@"
             <div style='font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;'>
                 <h2 style='color: #2b2b2b;'>¡Bienvenido a High Level Performance!</h2>
-                <p>Hola <strong>{request.Name}</strong>, gracias por registrarte.</p>
+                <p>Hola <strong>{client.Name}</strong>, gracias por registrarte.</p>
                 <p>Por favor confirma tu dirección de correo electrónico haciendo clic en el siguiente botón:</p>
                 <p style='margin: 30px 0; text-align: center;'>
                     <a href='{confirmUrl}' style='background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;'>Confirmar mi Email</a>

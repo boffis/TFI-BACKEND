@@ -14,15 +14,18 @@ namespace GymManagement.Application.Services
         private readonly IGymClassScheduleRepository _scheduleRepository;
         private readonly IGymClassRepository _gymClassRepository;
         private readonly ITrainerRepository _trainerRepository;
+        private readonly IInscriptionRepository _inscriptionRepository;
 
         public GymClassScheduleService(
             IGymClassScheduleRepository scheduleRepository,
             IGymClassRepository gymClassRepository,
-            ITrainerRepository trainerRepository)
+            ITrainerRepository trainerRepository,
+            IInscriptionRepository inscriptionRepository)
         {
             _scheduleRepository = scheduleRepository;
             _gymClassRepository = gymClassRepository;
             _trainerRepository = trainerRepository;
+            _inscriptionRepository = inscriptionRepository;
         }
 
         public List<GymClassScheduleResponse> GetAllSchedules()
@@ -47,6 +50,30 @@ namespace GymManagement.Application.Services
         {
             var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule no encontrado");
             var gymClasses = _gymClassRepository.GetAll().Where(gc => gc.GymClassScheduleId == id).ToList();
+
+            return BuildScheduleDetailResponse(schedule, gymClasses);
+        }
+
+        /// <summary>
+        /// Detail lookup for the client-facing schedule page. Unlike <see cref="GetAdminScheduleById"/>,
+        /// only sessions that haven't happened yet are included — clients shouldn't see past sessions
+        /// listed as bookable.
+        /// </summary>
+        public GymClassScheduleDetailResponse GetPublicScheduleById(Guid id)
+        {
+            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule no encontrado");
+            var gymClasses = _gymClassRepository.GetAll()
+                .Where(gc => gc.GymClassScheduleId == id && gc.Schedule >= DateTime.UtcNow)
+                .ToList();
+
+            return BuildScheduleDetailResponse(schedule, gymClasses);
+        }
+
+        private GymClassScheduleDetailResponse BuildScheduleDetailResponse(GymClassSchedule schedule, List<GymClass> gymClasses)
+        {
+            var inscriptionCounts = gymClasses.ToDictionary(
+                gc => gc.GymClassId,
+                gc => _inscriptionRepository.CountByClassId(gc.GymClassId));
 
             return new GymClassScheduleDetailResponse
             {
@@ -78,10 +105,7 @@ namespace GymManagement.Application.Services
                         Name = gc.Trainer?.Name ?? string.Empty,
                         Specialization = gc.Trainer is Trainer tr ? tr.Specialization : null
                     },
-                    // For schedule details, we might not have inscriptions eagerly loaded. 
-                    // Let's pass an empty list for now, or we'd need to inject inscription repo here.
-                    // But the user requested "the same dto".
-                    InscribedClients = []
+                    InscriptionCount = inscriptionCounts[gc.GymClassId]
                 }).ToList()
             };
         }

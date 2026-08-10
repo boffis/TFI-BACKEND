@@ -39,9 +39,10 @@ namespace GymManagement.Presentation.Controllers
         }
 
         [HttpGet("{classId}")]
+        [Authorize]
         public IActionResult GetClassById(Guid classId)
         {
-            var gymClass = _gymClassService.GetAdminClassById(classId);
+            var gymClass = _gymClassService.GetPublicClassById(classId, User.GetUserId());
             return Ok(gymClass);
         }
 

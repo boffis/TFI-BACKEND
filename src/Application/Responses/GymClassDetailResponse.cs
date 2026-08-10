@@ -11,8 +11,10 @@ namespace GymManagement.Application.Responses
         public required int MaxCapacity { get; set; }
         public required DateTime Schedule { get; set; }
         public Guid? GymClassScheduleId { get; set; }
-        
+
         public TrainerSummaryResponse Trainer { get; set; } = null!;
         public ICollection<ClientSummaryResponse> InscribedClients { get; set; } = [];
+        public int InscriptionCount { get; set; }
+        public bool IsCurrentUserInscribed { get; set; }
     }
 }

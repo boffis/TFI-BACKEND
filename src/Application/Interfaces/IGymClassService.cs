@@ -12,6 +12,7 @@ namespace GymManagement.Application.Interfaces
         List<GymClass> GetDeletedClasses();
         GymClass? GetClassById(Guid id);
         GymClassDetailResponse GetAdminClassById(Guid classId);
+        GymClassDetailResponse GetPublicClassById(Guid classId, Guid requestingUserId);
         GymClass? GetDeletedClassById(Guid id);
         GymClassResponse CreateClass(Guid trainerId, ClassRequest request);
         void ModifyClass(Guid classId, ClassRequest request, Guid requestingUserId, string userRole);
