@@ -19,7 +19,7 @@ namespace GymManagement.Application.Interfaces
         List<GymClassResponse> GetTrainerClasses(Guid trainerId, Guid requestingUserId, string userRole);
         void JoinClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
         void LeaveClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
-        List<Client> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole);
+        List<ClientSummaryResponse> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole);
         ScheduledAndSpecialClassesResponse GetScheduledAndSpecialClasses();
     }
 }

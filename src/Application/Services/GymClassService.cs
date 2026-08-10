@@ -268,7 +268,7 @@ namespace GymManagement.Application.Services
             _inscriptionRepository.Remove(clientId, classId);
         }
 
-        public List<Client> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole)
+        public List<ClientSummaryResponse> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole)
         {
             var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Clase no encontrada.");
 
@@ -276,7 +276,12 @@ namespace GymManagement.Application.Services
                 throw new ForbiddenException("No puedes ver los clientes de una clase que no te pertenece.");
 
             var inscriptions = _inscriptionRepository.GetByClassId(classId);
-            return [.. inscriptions.Where(i => i.Client != null).Select(i => i.Client!)];
+            return [.. inscriptions.Where(i => i.Client != null).Select(i => new ClientSummaryResponse
+            {
+                ClientId = i.Client!.UserId,
+                Name = i.Client.Name,
+                Email = i.Client.Email
+            })];
         }
 
         // -----------------------------------------------------------------------
