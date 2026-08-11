@@ -90,6 +90,7 @@ builder.Services.AddHttpClient("MercadoPago")
             }));
 
 builder.Services.AddScoped<MercadoPagoService>();
+builder.Services.AddScoped<IMembershipBillingService>(sp => sp.GetRequiredService<MercadoPagoService>());
 
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
 builder.Services.AddScoped<IMembershipPlanRepository, MembershipPlanRepository>();
@@ -143,8 +144,17 @@ app.MapGet("/health", () => Results.Ok(new { status = "Healthy" })).AllowAnonymo
 using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    context.Database.Migrate();
-    
+
+    // Migrations are applied by the deploy pipeline (`dotnet ef database update` in
+    // .github/workflows/main_tfi-api.yml) so that they run exactly once per release.
+    // Running them here too would let several App Service instances migrate the same
+    // database concurrently on start-up. In Development there is no pipeline, so the
+    // app still migrates itself.
+    if (app.Environment.IsDevelopment())
+    {
+        context.Database.Migrate();
+    }
+
     // Seed Admin
     if (!context.Admins.Any(a => a.Email == "highlevelperformancegym@gmail.com"))
     {

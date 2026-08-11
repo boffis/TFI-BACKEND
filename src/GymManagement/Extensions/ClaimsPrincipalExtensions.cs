@@ -8,15 +8,15 @@ namespace GymManagement.Presentation.Extensions
     {
         public static Guid GetUserId(this ClaimsPrincipal user)
         {
-            var claim = user.FindFirst(ClaimTypes.NameIdentifier) ?? 
-                throw new UnauthorizedException("Usuario no autenticado");
+            var claim = user.FindFirst(ClaimTypes.NameIdentifier) ??
+                throw new UnauthorizedException("User not authenticated.");
             return Guid.Parse(claim.Value);
         }
 
         public static string GetUserRole(this ClaimsPrincipal user)
         {
-            var claim = user.FindFirst(ClaimTypes.Role) ?? 
-                throw new UnauthorizedException("El usuario no tiene un rol asignado");
+            var claim = user.FindFirst(ClaimTypes.Role) ??
+                throw new UnauthorizedException("User has no assigned role.");
             return claim.Value;
         }
     }

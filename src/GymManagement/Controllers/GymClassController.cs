@@ -56,9 +56,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpPost("{classId}/join/{clientId}")]
         [Authorize]
-        public IActionResult JoinClass(Guid clientId, Guid classId)
+        public async Task<IActionResult> JoinClass(Guid clientId, Guid classId)
         {
-            _gymClassService.JoinClass(clientId, classId, User.GetUserId(), User.GetUserRole());
+            await _gymClassService.JoinClassAsync(clientId, classId, User.GetUserId(), User.GetUserRole());
             return Ok("Inscripción realizada con éxito.");
         }
 

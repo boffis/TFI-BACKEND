@@ -6,14 +6,14 @@ namespace GymManagement.Application.Interfaces
     public interface IUserService
     {
         UserResponse? GetById(Guid id);
-        UserDetailedResponse? GetDetailedById(Guid id);
+        Task<UserDetailedResponse?> GetDetailedByIdAsync(Guid id);
         UserResponse? GetDeletedById(Guid id);
-        GetAllUsersResponse GetAll();
+        Task<GetAllUsersResponse> GetAllAsync();
         List<UserResponse> GetAllDeleted();
         bool Update(Guid id, UserRequest request);
         bool Delete(Guid id);
         bool Recover(Guid id);
-        bool ChangeRole(Guid id, string newRole, string? specialization = null);
+        Task<bool> ChangeRoleAsync(Guid id, string newRole, string? specialization = null);
         List<ActiveTrainerResponse> GetActiveTrainers();
     }
 }

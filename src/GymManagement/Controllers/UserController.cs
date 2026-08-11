@@ -20,9 +20,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpGet]
         [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult GetAll()
+        public async Task<IActionResult> GetAll()
         {
-            return Ok(_userService.GetAll());
+            return Ok(await _userService.GetAllAsync());
         }
 
         [HttpGet("Deleted")]
@@ -34,9 +34,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpGet("{id}")]
         [Authorize]
-        public IActionResult GetById(Guid id)
+        public async Task<IActionResult> GetById(Guid id)
         {
-            var user = _userService.GetDetailedById(id);
+            var user = await _userService.GetDetailedByIdAsync(id);
             if (user == null) return NotFound();
             return Ok(user);
         }
@@ -92,11 +92,11 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpPatch("{id}/Role")]
         [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult ChangeRole(Guid id, [FromQuery] string newRole, [FromQuery] string? specialization = null)
+        public async Task<IActionResult> ChangeRole(Guid id, [FromQuery] string newRole, [FromQuery] string? specialization = null)
         {
             try
             {
-                var success = _userService.ChangeRole(id, newRole, specialization);
+                var success = await _userService.ChangeRoleAsync(id, newRole, specialization);
                 return success ? NoContent() : NotFound();
             }
             catch (NotImplementedException ex)

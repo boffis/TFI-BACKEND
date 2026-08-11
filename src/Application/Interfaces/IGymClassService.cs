@@ -18,7 +18,7 @@ namespace GymManagement.Application.Interfaces
         void ModifyClass(Guid classId, ClassRequest request, Guid requestingUserId, string userRole);
         void DeleteClass(Guid classId);
         List<GymClassResponse> GetTrainerClasses(Guid trainerId, Guid requestingUserId, string userRole);
-        void JoinClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
+        Task JoinClassAsync(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
         void LeaveClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
         List<ClientSummaryResponse> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole);
         ScheduledAndSpecialClassesResponse GetScheduledAndSpecialClasses();

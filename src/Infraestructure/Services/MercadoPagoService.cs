@@ -1,4 +1,5 @@
 using GymManagement.Application.Exceptions;
+using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Persistence;
@@ -21,7 +22,7 @@ using System.Threading.Tasks;
 
 namespace GymManagement.Infrastructure.Payments
 {
-    public class MercadoPagoService
+    public class MercadoPagoService : IMembershipBillingService
     {
         private readonly MercadoPagoSettings _settings;
         private readonly ApplicationDbContext _context;
@@ -104,7 +105,7 @@ namespace GymManagement.Infrastructure.Payments
                 .FirstOrDefaultAsync(m => m.MembershipId == membershipId);
 
             if (membership == null)
-                throw new NotFoundException($"Membership {membershipId} no encontrada.");
+                throw new NotFoundException($"Membership {membershipId} not found.");
 
             if (membership.MembershipPlan == null)
                 throw new Exception("Membership does not have an associated plan.");
@@ -190,17 +191,17 @@ namespace GymManagement.Infrastructure.Payments
         {
             if (string.IsNullOrWhiteSpace(request.PaymentMethodId))
             {
-                throw new ValidationException("El campo 'payment_method_id' es requerido.");
+                throw new ValidationException("The 'payment_method_id' field is required.");
             }
 
             if (string.IsNullOrWhiteSpace(request.Token))
             {
-                throw new ValidationException("El campo 'token' de tarjeta es requerido.");
+                throw new ValidationException("The card 'token' field is required.");
             }
 
             var plan = await _context.MembershipPlans
                 .FirstOrDefaultAsync(p => p.MembershipPlanId == request.MembershipPlanId)
-                ?? throw new NotFoundException($"Plan {request.MembershipPlanId} no encontrado.");
+                ?? throw new NotFoundException($"Plan {request.MembershipPlanId} not found.");
 
             // ── Step 1: Create Preapproval (subscription) in Mercado Pago via raw HTTP ──
             // The SDK v3.3.0 is missing card_token_id on PreapprovalCreateRequest,
@@ -251,7 +252,12 @@ namespace GymManagement.Infrastructure.Payments
                 var responseBody = await response.Content.ReadAsStringAsync();
 
                 if (!response.IsSuccessStatusCode)
-                    throw new ValidationException($"Error al suscribir en Mercado Pago: {responseBody}");
+                {
+                    _logger.LogError(
+                        "[MercadoPago] Failed to create preapproval (HTTP {StatusCode}): {Body}",
+                        (int)response.StatusCode, responseBody);
+                    throw new ValidationException("We couldn't set up your subscription with the payment provider. Please check your card details and try again.");
+                }
 
                 using var doc = JsonDocument.Parse(responseBody);
                 preapprovalId = doc.RootElement.GetProperty("id").GetString();
@@ -262,7 +268,8 @@ namespace GymManagement.Infrastructure.Payments
             }
             catch (Exception ex)
             {
-                throw new ValidationException($"Error al crear la suscripción en Mercado Pago: {ex.Message}");
+                _logger.LogError(ex, "[MercadoPago] Unexpected error creating subscription for user {UserId}", userId);
+                throw new ValidationException("We couldn't set up your subscription. Please try again or contact support.");
             }
 
             // ── Step 2: Cancel any previous preapproval in MP to avoid duplicates ────
@@ -349,13 +356,13 @@ namespace GymManagement.Infrastructure.Payments
         {
             var membership = await _context.Memberships
                 .FirstOrDefaultAsync(m => m.MembershipId == membershipId)
-                ?? throw new NotFoundException($"Membresía {membershipId} no encontrada.");
+                ?? throw new NotFoundException($"Membership {membershipId} not found.");
 
             if (membership.UserId != userId)
-                throw new UnauthorizedException("No tienes permiso para cancelar esta membresía.");
+                throw new UnauthorizedException("You don't have permission to cancel this membership.");
 
             if (membership.IsCancelled)
-                throw new Exception("Esta membresía ya está cancelada.");
+                throw new ConflictException("This membership is already cancelled.");
 
             if (!string.IsNullOrEmpty(membership.MpPreapprovalId))
             {
@@ -385,8 +392,10 @@ namespace GymManagement.Infrastructure.Payments
 
                     if (!resourceGone)
                     {
-                        throw new Exception(
-                            $"Mercado Pago no pudo cancelar la suscripción (HTTP {(int)response.StatusCode}): {error}");
+                        _logger.LogError(
+                            "[MercadoPago] Failed to cancel preapproval {PreapprovalId} (HTTP {StatusCode}): {Error}",
+                            membership.MpPreapprovalId, (int)response.StatusCode, error);
+                        throw new Exception("Mercado Pago couldn't cancel the subscription.");
                     }
                 }
             }
@@ -395,6 +404,50 @@ namespace GymManagement.Infrastructure.Payments
             membership.IsCancelled = true;
             await _context.SaveChangesAsync();
             await RemoveFutureInscriptionsAsync(membership.UserId);
+        }
+
+        /// <summary>
+        /// Updates the recurring charge amount of an existing preapproval so the next
+        /// billing cycle charges <paramref name="newAmount"/> instead of the old price.
+        /// Best-effort: logs and returns false instead of throwing, so a plan-wide price
+        /// update isn't aborted by one subscriber's preapproval being stale/gone on MP's side.
+        /// </summary>
+        public async Task<bool> UpdatePreapprovalAmountAsync(string preapprovalId, decimal newAmount)
+        {
+            try
+            {
+                var http = _httpClientFactory.CreateClient("MercadoPago");
+                http.DefaultRequestHeaders.Clear();
+                http.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.AccessToken?.Trim()}");
+
+                var body = JsonSerializer.Serialize(new
+                {
+                    auto_recurring = new { transaction_amount = newAmount }
+                });
+                var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+                var response = await http.PutAsync(
+                    $"https://api.mercadopago.com/preapproval/{preapprovalId}",
+                    content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    _logger.LogWarning(
+                        "[MercadoPago] Failed to update preapproval {PreapprovalId} amount to {NewAmount} (HTTP {StatusCode}): {Error}",
+                        preapprovalId, newAmount, (int)response.StatusCode, error);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[MercadoPago] Error updating preapproval {PreapprovalId} amount to {NewAmount}",
+                    preapprovalId, newAmount);
+                return false;
+            }
         }
 
         /// <summary>

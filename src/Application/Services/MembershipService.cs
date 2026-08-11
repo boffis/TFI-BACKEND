@@ -1,3 +1,4 @@
+using GymManagement.Application.Exceptions;
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
@@ -30,7 +31,20 @@ namespace GymManagement.Application.Services
         public async Task<MembershipResponse> AddMembership(MembershipRequest request)
         {
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
-                ?? throw new ArgumentException("Plan de membresía no encontrado");
+                ?? throw new NotFoundException("Membership plan not found.");
+
+            // A client may hold at most one non-cancelled membership at a time. Switching plan or
+            // renewing goes through ChangeMembership (which resets ExpirationDate), and stopping
+            // goes through CancelMembership. Without this guard, repeated calls here stack up
+            // parallel membership rows for the same user and it becomes arbitrary which one counts
+            // as "theirs" — GetActiveByUserId just takes the first match.
+            var existingMembership = await _membershipRepository.GetActiveByUserId(request.UserId);
+            if (existingMembership != null)
+            {
+                throw new ConflictException(existingMembership.ExpirationDate > DateTime.UtcNow
+                    ? "This user already has an active membership. Change the plan on the existing membership, or cancel it before creating a new one."
+                    : "This user already has a membership awaiting activation. Activate or cancel it before creating a new one.");
+            }
 
             var membership = new Membership
             {

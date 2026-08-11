@@ -36,16 +36,25 @@ namespace GymManagement.Application.Services
             _gymClassRepository = gymClassRepository;
         }
 
-        public GetAllUsersResponse GetAll()
+        public async Task<GetAllUsersResponse> GetAllAsync()
         {
             ExpireUnconfirmedUsers();
+
+            // Fetch every active membership once and index it by user, instead of querying
+            // per client (an N+1: one round-trip to the database for each client in the gym).
+            // GroupBy before ToDictionary because a user can hold more than one non-cancelled
+            // membership — ToDictionary throws on duplicate keys — and in that case the one
+            // that matters is whichever expires last.
+            var activeMembershipByUserId = (await _membershipRepository.GetAllActive())
+                .GroupBy(m => m.UserId)
+                .ToDictionary(g => g.Key, g => g.MaxBy(m => m.ExpirationDate)!);
 
             var clients = _clientRepository.GetAll()
                 .Select(c =>
                 {
-                    var activeMembership = _membershipRepository.GetActiveByUserId(c.UserId).Result;
-                    var isMembershipActive = activeMembership != null
-                        && activeMembership.ExpirationDate > DateTime.UtcNow;
+                    var isMembershipActive =
+                        activeMembershipByUserId.TryGetValue(c.UserId, out var membership)
+                        && membership.ExpirationDate > DateTime.UtcNow;
                     return c.ToClientResponse(isMembershipActive);
                 })
                 .ToList();
@@ -84,10 +93,12 @@ namespace GymManagement.Application.Services
             return user.ToUserResponse();
         }
 
-        public UserDetailedResponse? GetDetailedById(Guid id)
+        public async Task<UserDetailedResponse?> GetDetailedByIdAsync(Guid id)
         {
             var user = GetUserEntityById(id) ?? GetDeletedUserEntityById(id);
             if (user == null) return null;
+
+            var memberships = await _membershipRepository.GetByUserId(id);
 
             UserResponse baseResponse;
             if (user is Trainer trainer) baseResponse = TrainerMapper.ToTrainerResponse(trainer);
@@ -113,7 +124,7 @@ namespace GymManagement.Application.Services
                     PaymentMethod = p.PaymentMethod,
                     PaymentState = p.PaymentState
                 }).ToList(),
-                Memberships = _membershipRepository.GetByUserId(id).Result.Select(m => new MembershipResponse
+                Memberships = memberships.Select(m => new MembershipResponse
                 {
                     MembershipId = m.MembershipId,
                     UserId = m.UserId,
@@ -215,7 +226,7 @@ namespace GymManagement.Application.Services
             return true;
         }
 
-        public bool ChangeRole(Guid id, string newRole, string? specialization = null)
+        public async Task<bool> ChangeRoleAsync(Guid id, string newRole, string? specialization = null)
         {
             var user = GetUserEntityById(id);
             if (user == null) return false;
@@ -227,9 +238,9 @@ namespace GymManagement.Application.Services
             if (user is Client)
             {
                 // Cancel active membership
-                var activeMembership = _membershipRepository.GetActiveByUserId(id).Result;
+                var activeMembership = await _membershipRepository.GetActiveByUserId(id);
                 if (activeMembership != null)
-                    _membershipRepository.CancelMembership(activeMembership.MembershipId).Wait();
+                    await _membershipRepository.CancelMembership(activeMembership.MembershipId);
 
                 // Handle inscriptions: delete future ones (free the spot), nullify past ones (keep attendance record)
                 var inscriptions = _inscriptionRepository.GetByClientId(id);
@@ -250,7 +261,7 @@ namespace GymManagement.Application.Services
                     .Any(gc => gc.Schedule > DateTime.UtcNow);
                 if (hasFutureClasses)
                     throw new ConflictException(
-                        "El entrenador tiene clases futuras asignadas. Reasígnalas o elimínalas antes de cambiar el rol.");
+                        "This trainer has future classes assigned. Reassign or delete them before changing their role.");
             }
 
             if (user is Client) _clientRepository.HardDelete(id);
@@ -322,7 +333,7 @@ namespace GymManagement.Application.Services
                     break;
 
                 default:
-                    throw new ArgumentException($"Unknown role: {newRole}");
+                    throw new ValidationException($"Unknown role: {newRole}");
             }
 
             return true;

@@ -8,7 +8,7 @@ namespace GymManagement.Application.Interfaces
     {
         Task<bool> SignUpAsync(UserRequest request, string baseUrl);
 
-        AuthResponse? SignIn(SignInRequest request);
+        Task<AuthResponse?> SignInAsync(SignInRequest request);
 
         bool ConfirmEmail(string email, string token);
 

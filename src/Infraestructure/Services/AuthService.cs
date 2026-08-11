@@ -98,7 +98,7 @@ namespace GymManagement.Infrastructure.Services
             return true;
         }
 
-        public AuthResponse? SignIn(SignInRequest request)
+        public async Task<AuthResponse?> SignInAsync(SignInRequest request)
         {
             User? user = _userRepository.GetUserByEmail(request.Email);
             string? role = null;
@@ -112,7 +112,7 @@ namespace GymManagement.Infrastructure.Services
 
             if (user == null || role == null)
             {
-                throw new UnauthorizedException("Credenciales incorrectas.");
+                throw new UnauthorizedException("Incorrect credentials.");
             }
 
             if (!user.IsEmailConfirmed)
@@ -121,16 +121,16 @@ namespace GymManagement.Infrastructure.Services
                     user.EmailConfirmationTokenExpiration.Value < DateTime.UtcNow)
                 {
                     _userRepository.RemoveUser(user);
-                    throw new UnauthorizedException("El plazo de 48 horas para confirmar tu email ha expirado y tu cuenta fue eliminada. Por favor regístrate nuevamente.");
+                    throw new UnauthorizedException("The 48-hour window to confirm your email has expired and your account was deleted. Please register again.");
                 }
 
-                throw new UnauthorizedException("Debes confirmar tu correo electrónico antes de iniciar sesión. Revisa tu casilla de correo.");
+                throw new UnauthorizedException("You must confirm your email before logging in. Please check your inbox.");
             }
 
-            var detailedUser = _userService.GetDetailedById(user.UserId);
+            var detailedUser = await _userService.GetDetailedByIdAsync(user.UserId);
             if (detailedUser == null)
             {
-                throw new UnauthorizedException("No se pudieron obtener los detalles del usuario.");
+                throw new UnauthorizedException("Could not retrieve user details.");
             }
 
             string token = GenerateToken(detailedUser.UserId, detailedUser.Email, role);

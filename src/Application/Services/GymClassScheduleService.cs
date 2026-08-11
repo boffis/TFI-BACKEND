@@ -36,11 +36,11 @@ namespace GymManagement.Application.Services
 
         public GymClassScheduleResponse? GetScheduleById(Guid id, Guid requestingUserId, string userRole)
         {
-            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule no encontrado");
+            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule not found.");
 
             if (userRole == "Trainer" && schedule.TrainerId != requestingUserId)
             {
-                throw new ForbiddenException("No puedes ver una clase que no te pertenece.");
+                throw new ForbiddenException("You can't view a class that isn't yours.");
             }
 
             return MapToResponse(schedule);
@@ -48,7 +48,7 @@ namespace GymManagement.Application.Services
 
         public GymClassScheduleDetailResponse GetAdminScheduleById(Guid id)
         {
-            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule no encontrado");
+            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule not found.");
             var gymClasses = _gymClassRepository.GetAll().Where(gc => gc.GymClassScheduleId == id).ToList();
 
             return BuildScheduleDetailResponse(schedule, gymClasses);
@@ -61,7 +61,7 @@ namespace GymManagement.Application.Services
         /// </summary>
         public GymClassScheduleDetailResponse GetPublicScheduleById(Guid id)
         {
-            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule no encontrado");
+            var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule not found.");
             var gymClasses = _gymClassRepository.GetAll()
                 .Where(gc => gc.GymClassScheduleId == id && gc.Schedule >= DateTime.UtcNow)
                 .ToList();
@@ -140,16 +140,16 @@ namespace GymManagement.Application.Services
 
         public void ModifySchedule(Guid scheduleId, GymClassScheduleRequest request, Guid requestingUserId, string userRole, bool updateUpcomingClasses)
         {
-            var schedule = _scheduleRepository.GetById(scheduleId) ?? throw new NotFoundException("Schedule no encontrado");
+            var schedule = _scheduleRepository.GetById(scheduleId) ?? throw new NotFoundException("Schedule not found.");
 
             if (userRole == "Trainer")
             {
                 if (schedule.TrainerId != requestingUserId)
-                    throw new ForbiddenException("No puedes modificar un horario que no te pertenece.");
+                    throw new ForbiddenException("You can't modify a schedule that isn't yours.");
 
                 // A Trainer cannot reassign the schedule to a different trainer
                 if (request.TrainerId != requestingUserId)
-                    throw new ForbiddenException("No puedes reasignar un horario a otro entrenador.");
+                    throw new ForbiddenException("You can't reassign a schedule to another trainer.");
             }
 
             // If the trainer is being changed (Admin path), validate the new trainer
@@ -198,7 +198,7 @@ namespace GymManagement.Application.Services
 
         public void DeleteSchedule(Guid scheduleId, bool deleteUpcomingClasses)
         {
-            var schedule = _scheduleRepository.GetById(scheduleId) ?? throw new NotFoundException("Schedule no encontrado");
+            var schedule = _scheduleRepository.GetById(scheduleId) ?? throw new NotFoundException("Schedule not found.");
 
             _scheduleRepository.Delete(scheduleId);
 
@@ -275,10 +275,10 @@ namespace GymManagement.Application.Services
         private Trainer AssertIsActiveTrainer(Guid trainerId)
         {
             var trainer = _trainerRepository.GetById(trainerId)
-                ?? throw new NotFoundException("Entrenador no encontrado o el usuario no tiene rol de Trainer.");
+                ?? throw new NotFoundException("Trainer not found, or the user doesn't have the Trainer role.");
 
             if (trainer.IsUserDeleted)
-                throw new NotFoundException("El entrenador está dado de baja.");
+                throw new NotFoundException("This trainer has been deactivated.");
 
             return trainer;
         }

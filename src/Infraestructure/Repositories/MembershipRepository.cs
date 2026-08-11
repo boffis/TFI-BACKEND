@@ -32,6 +32,13 @@ namespace GymManagement.Infrastructure.Repositories
             => await _dbSet.Include(m => m.MembershipPlan)
                            .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
 
+        // No Include of MembershipPlan: callers of this overload only need UserId/ExpirationDate.
+        // AsNoTracking because the results are read-only — nothing here is written back.
+        public async Task<List<Membership>> GetAllActive()
+            => await _dbSet.AsNoTracking()
+                           .Where(m => !m.IsCancelled)
+                           .ToListAsync();
+
         public async Task<List<Membership>> GetByPlanId(Guid planId)
             => await _dbSet.Include(m => m.User)
                            .Where(m => m.MembershipPlanId == planId)

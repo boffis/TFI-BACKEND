@@ -59,7 +59,7 @@ namespace GymManagement.Application.Services
         public GymClassDetailResponse GetAdminClassById(Guid classId)
         {
             var gymClass = _gymClassRepository.GetById(classId)
-                ?? throw new NotFoundException("Clase no encontrada");
+                ?? throw new NotFoundException("Class not found.");
 
             return BuildClassDetailResponse(gymClass, includeClientNames: true);
         }
@@ -74,10 +74,10 @@ namespace GymManagement.Application.Services
         public GymClassDetailResponse GetPublicClassById(Guid classId, Guid requestingUserId)
         {
             var gymClass = _gymClassRepository.GetById(classId)
-                ?? throw new NotFoundException("Clase no encontrada");
+                ?? throw new NotFoundException("Class not found.");
 
             if (gymClass.Schedule < DateTime.UtcNow)
-                throw new NotFoundException("Clase no encontrada");
+                throw new NotFoundException("Class not found.");
 
             var response = BuildClassDetailResponse(gymClass, includeClientNames: false);
             response.IsCurrentUserInscribed = _inscriptionRepository.IsUserRepeated(requestingUserId, classId);
@@ -193,16 +193,16 @@ namespace GymManagement.Application.Services
         public void ModifyClass(Guid classId, ClassRequest request, Guid requestingUserId, string userRole)
         {
             var gymClass = _gymClassRepository.GetById(classId)
-                ?? throw new NotFoundException("Clase no encontrada");
+                ?? throw new NotFoundException("Class not found.");
 
             if (userRole == "Trainer")
             {
                 if (gymClass.TrainerId != requestingUserId)
-                    throw new ForbiddenException("No puedes modificar una clase que no te ha sido asignada.");
+                    throw new ForbiddenException("You can't modify a class that hasn't been assigned to you.");
 
                 // A Trainer cannot reassign a class to a different trainer
                 if (request.TrainerId != requestingUserId)
-                    throw new ForbiddenException("No puedes reasignar una clase a otro entrenador.");
+                    throw new ForbiddenException("You can't reassign a class to another trainer.");
             }
 
             // If the trainer is being changed (Admin path), validate the new trainer
@@ -224,7 +224,7 @@ namespace GymManagement.Application.Services
         public void DeleteClass(Guid classId)
         {
             var gymClass = _gymClassRepository.GetById(classId)
-                ?? throw new NotFoundException("Clase no encontrada");
+                ?? throw new NotFoundException("Class not found.");
 
             _gymClassRepository.Delete(classId);
         }
@@ -233,7 +233,7 @@ namespace GymManagement.Application.Services
         {
             if (userRole == "Trainer" && trainerId != requestingUserId)
             {
-                throw new ForbiddenException("No puedes ver las clases de otro entrenador.");
+                throw new ForbiddenException("You can't view another trainer's classes.");
             }
 
             var classes = _gymClassRepository.GetByTrainerId(trainerId);
@@ -248,26 +248,26 @@ namespace GymManagement.Application.Services
             })];
         }
 
-        public void JoinClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole)
+        public async Task JoinClassAsync(Guid clientId, Guid classId, Guid requestingUserId, string userRole)
         {
             if (userRole == "Client" && clientId != requestingUserId)
-                throw new ForbiddenException("No puedes inscribir a otro cliente.");
+                throw new ForbiddenException("You can't enroll another client.");
 
-            var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Clase no encontrada.");
+            var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Class not found.");
 
             if (userRole == "Trainer" && gymClass.TrainerId != requestingUserId)
-                throw new ForbiddenException("No puedes inscribir clientes en una clase que no te pertenece.");
+                throw new ForbiddenException("You can't enroll clients in a class that isn't yours.");
 
             int currentCount = _inscriptionRepository.CountByClassId(classId);
-            if (currentCount >= gymClass.MaxCapacity) throw new ConflictException("La clase está llena.");
+            if (currentCount >= gymClass.MaxCapacity) throw new ConflictException("The class is full.");
 
-            if (_inscriptionRepository.IsUserRepeated(clientId, classId)) throw new ConflictException("El cliente ya está inscripto.");
+            if (_inscriptionRepository.IsUserRepeated(clientId, classId)) throw new ConflictException("The client is already enrolled.");
 
-            var client = _clientRepository.GetById(clientId) ?? throw new NotFoundException("Cliente no encontrado.");
+            var client = _clientRepository.GetById(clientId) ?? throw new NotFoundException("Client not found.");
 
-            var activeMembership = _membershipRepository.GetActiveByUserId(clientId).Result;
+            var activeMembership = await _membershipRepository.GetActiveByUserId(clientId);
             if (activeMembership == null || activeMembership.ExpirationDate < DateTime.UtcNow)
-                throw new ForbiddenException("El cliente no tiene una membresía activa.");
+                throw new ForbiddenException("This client doesn't have an active membership.");
 
             var inscription = new Inscription
             {
@@ -283,25 +283,25 @@ namespace GymManagement.Application.Services
         public void LeaveClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole)
         {
             if (userRole == "Client" && clientId != requestingUserId)
-                throw new ForbiddenException("No puedes eliminar la inscripción de otro cliente.");
+                throw new ForbiddenException("You can't remove another client's enrollment.");
 
-            var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Clase no encontrada.");
+            var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Class not found.");
 
             if (userRole == "Trainer" && gymClass.TrainerId != requestingUserId)
-                throw new ForbiddenException("No puedes eliminar inscripciones de una clase que no te pertenece.");
+                throw new ForbiddenException("You can't remove enrollments from a class that isn't yours.");
 
             if (!_inscriptionRepository.IsUserRepeated(clientId, classId))
-                throw new ConflictException("El cliente no está inscripto en esta clase.");
+                throw new ConflictException("This client isn't enrolled in this class.");
 
             _inscriptionRepository.Remove(clientId, classId);
         }
 
         public List<ClientSummaryResponse> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole)
         {
-            var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Clase no encontrada.");
+            var gymClass = _gymClassRepository.GetById(classId) ?? throw new NotFoundException("Class not found.");
 
             if (userRole == "Trainer" && gymClass.TrainerId != requestingUserId)
-                throw new ForbiddenException("No puedes ver los clientes de una clase que no te pertenece.");
+                throw new ForbiddenException("You can't view the clients of a class that isn't yours.");
 
             var inscriptions = _inscriptionRepository.GetByClassId(classId);
             return [.. inscriptions.Where(i => i.Client != null).Select(i => new ClientSummaryResponse
@@ -323,10 +323,10 @@ namespace GymManagement.Application.Services
         private Trainer AssertIsActiveTrainer(Guid trainerId)
         {
             var trainer = _trainerRepository.GetById(trainerId)
-                ?? throw new NotFoundException("Entrenador no encontrado o el usuario no tiene rol de Trainer.");
+                ?? throw new NotFoundException("Trainer not found, or the user doesn't have the Trainer role.");
 
             if (trainer.IsUserDeleted)
-                throw new NotFoundException("El entrenador está dado de baja.");
+                throw new NotFoundException("This trainer has been deactivated.");
 
             return trainer;
         }

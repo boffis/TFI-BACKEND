@@ -19,20 +19,32 @@ namespace GymManagement.Presentation.Middlewares
             Exception exception,
             CancellationToken cancellationToken)
         {
-            _logger.LogError(exception, "Ha ocurrido un error no controlado: {Message}", exception.Message);
+            _logger.LogError(exception, "Unhandled error: {Message}", exception.Message);
 
-            (int statusCode, string title, string defaultMessage) = exception switch
+            (int statusCode, string title, string safeMessage) = exception switch
             {
-                UnauthorizedException => ((int)HttpStatusCode.Unauthorized, "No autorizado", "Acceso denegado."),
-                ForbiddenException => ((int)HttpStatusCode.Forbidden, "Prohibido", "No tiene permisos para realizar esta acción."),
-                ConflictException => ((int)HttpStatusCode.Conflict, "Conflicto", "Operación inválida."),
-                NotFoundException => ((int)HttpStatusCode.NotFound, "Recurso no encontrado", "El recurso solicitado no fue encontrado."),
-                ValidationException => ((int)HttpStatusCode.BadRequest, "Error de validacion", "Hubo uno o mas errores de validación en la solicitud."),
-                _ => ((int)HttpStatusCode.InternalServerError, "Error interno del servidor", "Ha ocurrido un error interno.")
+                UnauthorizedException => ((int)HttpStatusCode.Unauthorized, "Unauthorized", "Access denied."),
+                ForbiddenException => ((int)HttpStatusCode.Forbidden, "Forbidden", "You don't have permission to perform this action."),
+                ConflictException => ((int)HttpStatusCode.Conflict, "Conflict", "This action couldn't be completed."),
+                NotFoundException => ((int)HttpStatusCode.NotFound, "Not found", "The requested resource was not found."),
+                ValidationException => ((int)HttpStatusCode.BadRequest, "Validation error", "There was a validation error in the request."),
+                _ => ((int)HttpStatusCode.InternalServerError, "Internal server error", "Something went wrong. Please try again later.")
             };
 
-            bool hasMeaningfulMessage = !string.IsNullOrWhiteSpace(exception.Message) && !exception.Message.Contains("Exception of type");
-            string detail = hasMeaningfulMessage ? exception.Message : defaultMessage;
+            // Only exceptions we deliberately throw with a short, user-facing message are ever
+            // shown to the client verbatim. Anything else — unexpected .NET/third-party exceptions,
+            // database errors, raw upstream API failures — could contain internal details or status
+            // codes not meant for clients, so it always gets the generic safeMessage above. The full
+            // detail is still captured server-side via the log line above.
+            bool isKnownAppException = exception is UnauthorizedException
+                or ForbiddenException
+                or ConflictException
+                or NotFoundException
+                or ValidationException;
+
+            string detail = isKnownAppException && !string.IsNullOrWhiteSpace(exception.Message)
+                ? exception.Message
+                : safeMessage;
 
             var problemDetails = new ProblemDetails
             {

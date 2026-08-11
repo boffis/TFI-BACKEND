@@ -12,6 +12,12 @@ namespace GymManagement.Application.Interfaces
 
         Task<Membership?> GetActiveByUserId(Guid userId);
 
+        /// <summary>
+        /// Every non-cancelled membership, in a single query. Lets callers that need the
+        /// membership status of many users at once avoid one round-trip per user.
+        /// </summary>
+        Task<List<Membership>> GetAllActive();
+
         Task<List<Membership>> GetByPlanId(Guid planId);
 
         Task<Membership> AddMembership(Membership membership);

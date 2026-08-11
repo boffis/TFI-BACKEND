@@ -22,7 +22,7 @@ namespace GymManagement.Presentation.Controllers
             bool result = await _authService.SignUpAsync(request, baseUrl);
             
             if (!result)
-                return BadRequest("El email ya se encuentra registrado.");
+                return BadRequest("This email is already registered.");
 
             return Ok(new { message = "Registro exitoso. Se ha enviado un correo de confirmación a tu casilla de email. Por favor confírmalo antes de iniciar sesión." });
         }
@@ -33,18 +33,18 @@ namespace GymManagement.Presentation.Controllers
             bool success = _authService.ConfirmEmail(email, token);
             if (!success)
             {
-                return BadRequest(new { message = "El enlace de confirmación es incorrecto o han transcurrido más de 48 horas. Si tu token expiró, la cuenta fue eliminada y deberás registrarte nuevamente." });
+                return BadRequest(new { message = "The confirmation link is incorrect or more than 48 hours have passed. If your token expired, the account was deleted and you'll need to register again." });
             }
 
             return Ok(new { message = "Tu cuenta ha sido verificada correctamente. Ya puedes iniciar sesión en Gym Management." });
         }
 
         [HttpPost("SignIn")]
-        public IActionResult SignIn([FromBody] SignInRequest request)
+        public async Task<IActionResult> SignIn([FromBody] SignInRequest request)
         {
-            var response = _authService.SignIn(request);
+            var response = await _authService.SignInAsync(request);
             if (response == null)
-                return Unauthorized("Credenciales inválidas.");
+                return Unauthorized("Invalid credentials.");
 
             return Ok(response);
         }
@@ -62,7 +62,7 @@ namespace GymManagement.Presentation.Controllers
             bool success = _authService.ResetPassword(request);
             if (!success)
             {
-                return BadRequest(new { message = "El token de restablecimiento es inválido o ha expirado." });
+                return BadRequest(new { message = "The reset token is invalid or has expired." });
             }
 
             return Ok(new { message = "Tu contraseña ha sido restablecida exitosamente. Ya puedes iniciar sesión con tu nueva contraseña." });

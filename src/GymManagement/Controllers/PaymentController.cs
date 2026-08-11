@@ -80,7 +80,7 @@ namespace GymManagement.Presentation.Controllers
                 // Validate HMAC-SHA256 signature if WebhookSecret is configured
                 if (!_mercadoPagoService.ValidateWebhookSignature(xSignature, requestId, resourceId))
                 {
-                    return Unauthorized("Firma de webhook inválida.");
+                    return Unauthorized("Invalid webhook signature.");
                 }
 
                 // Fire-and-forget: process in background so MP gets 200 immediately.
