@@ -93,6 +93,9 @@ builder.Services.AddHttpClient("MercadoPago")
 builder.Services.AddScoped<MercadoPagoService>();
 builder.Services.AddScoped<IMembershipBillingService>(sp => sp.GetRequiredService<MercadoPagoService>());
 
+builder.Services.AddScoped<IMetricsRepository, MetricsRepository>();
+builder.Services.AddScoped<MetricsService>();
+
 builder.Services.AddScoped<IMembershipRepository, MembershipRepository>();
 builder.Services.AddScoped<IMembershipPlanRepository, MembershipPlanRepository>();
 builder.Services.AddScoped<MembershipService>();
