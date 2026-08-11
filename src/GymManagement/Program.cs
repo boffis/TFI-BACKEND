@@ -64,6 +64,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 
 builder.Services.AddScoped<IGymClassRepository, GymClassRepository>();
 builder.Services.AddScoped<IInscriptionRepository, InscriptionRepository>();
+builder.Services.AddScoped<IClassNotificationService, ClassNotificationService>();
 builder.Services.AddScoped<IGymClassService, GymClassService>();
 
 builder.Services.AddScoped<IGymClassScheduleRepository, GymClassScheduleRepository>();

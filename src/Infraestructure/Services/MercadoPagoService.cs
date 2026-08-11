@@ -1,3 +1,4 @@
+using GymManagement.Application.Common;
 using GymManagement.Application.Exceptions;
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
@@ -460,7 +461,7 @@ namespace GymManagement.Infrastructure.Payments
         {
             var futureInscriptions = await _context.Inscriptions
                 .Include(i => i.GymClass)
-                .Where(i => i.ClientId == userId && i.GymClass.Schedule >= DateTime.UtcNow)
+                .Where(i => i.ClientId == userId && i.GymClass.Schedule >= GymTime.Now)
                 .ToListAsync();
 
             if (futureInscriptions.Count == 0) return;

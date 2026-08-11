@@ -1,7 +1,9 @@
+using GymManagement.Application.Common;
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
+using GymManagement.Domain.Enums;
 using GymManagement.Application.Exceptions;
 using System.Linq;
 
@@ -15,6 +17,7 @@ namespace GymManagement.Application.Services
         private readonly IClientRepository _clientRepository;
         private readonly IGymClassScheduleRepository _scheduleRepository;
         private readonly IMembershipRepository _membershipRepository;
+        private readonly IClassNotificationService _notifications;
 
         public GymClassService(
             IGymClassRepository gymClassRepository,
@@ -22,7 +25,8 @@ namespace GymManagement.Application.Services
             IInscriptionRepository inscriptionRepository,
             IClientRepository clientRepository,
             IGymClassScheduleRepository scheduleRepository,
-            IMembershipRepository membershipRepository)
+            IMembershipRepository membershipRepository,
+            IClassNotificationService notifications)
         {
             _gymClassRepository = gymClassRepository;
             _trainerRepository = trainerRepository;
@@ -30,6 +34,7 @@ namespace GymManagement.Application.Services
             _clientRepository = clientRepository;
             _scheduleRepository = scheduleRepository;
             _membershipRepository = membershipRepository;
+            _notifications = notifications;
         }
 
         public List<GymClassdto> GetAllClasses()
@@ -76,7 +81,7 @@ namespace GymManagement.Application.Services
             var gymClass = _gymClassRepository.GetById(classId)
                 ?? throw new NotFoundException("Class not found.");
 
-            if (gymClass.Schedule < DateTime.UtcNow)
+            if (gymClass.Schedule < GymTime.Now)
                 throw new NotFoundException("Class not found.");
 
             var response = BuildClassDetailResponse(gymClass, includeClientNames: false);
@@ -103,12 +108,7 @@ namespace GymManagement.Application.Services
                     Specialization = gymClass.Trainer is Trainer t ? t.Specialization : null
                 },
                 InscribedClients = includeClientNames
-                    ? inscriptions.Where(i => i.Client != null).Select(i => new ClientSummaryResponse
-                    {
-                        ClientId = i.ClientId ?? Guid.Empty,
-                        Name = i.Client!.Name,
-                        Email = i.Client.Email
-                    }).ToList()
+                    ? inscriptions.Where(i => i.Client != null).Select(ToClientSummary).ToList()
                     : [],
                 InscriptionCount = inscriptions.Count
             };
@@ -138,7 +138,7 @@ namespace GymManagement.Application.Services
             }).ToList();
 
             var specialClasses = _gymClassRepository.GetAll()
-                .Where(gc => gc.GymClassScheduleId == null && gc.Schedule >= DateTime.UtcNow)
+                .Where(gc => gc.GymClassScheduleId == null && gc.Schedule >= GymTime.Now)
                 .Select(gc => new GymClassResponse
                 {
                     GymClassId = gc.GymClassId,
@@ -190,7 +190,7 @@ namespace GymManagement.Application.Services
             };
         }
 
-        public void ModifyClass(Guid classId, ClassRequest request, Guid requestingUserId, string userRole)
+        public async Task ModifyClassAsync(Guid classId, ClassRequest request, Guid requestingUserId, string userRole)
         {
             var gymClass = _gymClassRepository.GetById(classId)
                 ?? throw new NotFoundException("Class not found.");
@@ -213,18 +213,30 @@ namespace GymManagement.Application.Services
                 gymClass.Trainer = newTrainer;
             }
 
+            // Captured before the mutation so the email can show what the time used to be.
+            var previousSchedule = gymClass.Schedule;
+            var scheduleChanged = request.Schedule != previousSchedule;
+
             gymClass.ClassName = request.ClassName;
             gymClass.ClassDescription = request.ClassDescription;
             gymClass.MaxCapacity = request.MaxCapacity;
             gymClass.Schedule = request.Schedule;
 
             _gymClassRepository.Update(gymClass);
+
+            // Only a moved class is worth an email — renaming it or changing its capacity
+            // doesn't affect whether a client can still attend.
+            if (scheduleChanged)
+                await _notifications.NotifyClassRescheduledAsync(gymClass, previousSchedule);
         }
 
-        public void DeleteClass(Guid classId)
+        public async Task DeleteClassAsync(Guid classId)
         {
             var gymClass = _gymClassRepository.GetById(classId)
                 ?? throw new NotFoundException("Class not found.");
+
+            // Notify first: the roster has to be readable, and this never throws.
+            await _notifications.NotifyClassesCancelledAsync([gymClass]);
 
             _gymClassRepository.Delete(classId);
         }
@@ -304,17 +316,93 @@ namespace GymManagement.Application.Services
                 throw new ForbiddenException("You can't view the clients of a class that isn't yours.");
 
             var inscriptions = _inscriptionRepository.GetByClassId(classId);
-            return [.. inscriptions.Where(i => i.Client != null).Select(i => new ClientSummaryResponse
+            return [.. inscriptions.Where(i => i.Client != null).Select(ToClientSummary)];
+        }
+
+        /// <summary>
+        /// Records attendance for a whole class in one go. Only the trainer who owns the class,
+        /// or an Admin, may do this, and only once the class has actually started.
+        /// Returns the refreshed roster so the caller doesn't need a second request.
+        /// </summary>
+        public List<ClientSummaryResponse> RecordAttendance(
+            Guid classId, AttendanceRequest request, Guid requestingUserId, string userRole)
+        {
+            var gymClass = _gymClassRepository.GetById(classId)
+                ?? throw new NotFoundException("Class not found.");
+
+            if (userRole == "Trainer" && gymClass.TrainerId != requestingUserId)
+                throw new ForbiddenException("You can't record attendance for a class that isn't yours.");
+
+            // Marking attendance before the class has started would let a trainer fill in a
+            // register for sessions that haven't happened yet.
+            if (gymClass.Schedule > GymTime.Now)
+                throw new ConflictException("This class hasn't started yet, so attendance can't be recorded.");
+
+            var duplicateClientIds = request.Entries
+                .GroupBy(e => e.ClientId)
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateClientIds.Count > 0)
+                throw new ValidationException("The same client appears more than once in the attendance list.");
+
+            // C# enums accept any underlying int, so an out-of-range status would otherwise be
+            // stored verbatim and read back as a value nothing knows how to render.
+            if (request.Entries.Any(e => !Enum.IsDefined(e.Status)))
+                throw new ValidationException("The attendance list contains an unrecognised status value.");
+
+            var inscriptions = _inscriptionRepository.GetByClassId(classId);
+            var inscriptionByClientId = inscriptions
+                .Where(i => i.ClientId != null)
+                .ToDictionary(i => i.ClientId!.Value);
+
+            // Reject unknown clients outright rather than skipping them: silently ignoring an
+            // entry would hide a frontend bug behind an apparently successful save.
+            var notEnrolled = request.Entries
+                .Where(e => !inscriptionByClientId.ContainsKey(e.ClientId))
+                .ToList();
+
+            if (notEnrolled.Count > 0)
+                throw new ValidationException("The attendance list contains clients who aren't enrolled in this class.");
+
+            var touched = new List<Inscription>();
+            foreach (var entry in request.Entries)
             {
-                ClientId = i.Client!.UserId,
-                Name = i.Client.Name,
-                Email = i.Client.Email
-            })];
+                var inscription = inscriptionByClientId[entry.ClientId];
+                if (inscription.AttendanceStatus == entry.Status) continue;
+
+                inscription.AttendanceStatus = entry.Status;
+                // Clearing a mark clears its timestamp too, so the two never disagree.
+                inscription.AttendanceRecordedAt = entry.Status == AttendanceStatus.NotRecorded
+                    ? null
+                    : DateTime.UtcNow;
+                touched.Add(inscription);
+            }
+
+            if (touched.Count > 0)
+                _inscriptionRepository.UpdateRange(touched);
+
+            return [.. inscriptions.Where(i => i.Client != null).Select(ToClientSummary)];
         }
 
         // -----------------------------------------------------------------------
         // Helpers
         // -----------------------------------------------------------------------
+
+        /// <summary>
+        /// Maps an inscription whose Client is loaded. Callers must filter out inscriptions with a
+        /// null Client first — those are enrolments left behind by a role change (see
+        /// <c>NullifyClientId</c>), which exist only to preserve the attendance record.
+        /// </summary>
+        private static ClientSummaryResponse ToClientSummary(Inscription inscription) => new()
+        {
+            ClientId = inscription.Client!.UserId,
+            Name = inscription.Client.Name,
+            Email = inscription.Client.Email,
+            AttendanceStatus = inscription.AttendanceStatus,
+            AttendanceRecordedAt = inscription.AttendanceRecordedAt
+        };
 
         /// <summary>
         /// Asserts that <paramref name="trainerId"/> belongs to an active, non-deleted Trainer.

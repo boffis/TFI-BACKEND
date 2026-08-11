@@ -7,6 +7,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Abstractions only: lets Application services log without depending on a logging
+         implementation, which stays an Infrastructure/host concern. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.OpenApi" Version="3.7.0" />
   </ItemGroup>
 

@@ -15,12 +15,13 @@ namespace GymManagement.Application.Interfaces
         GymClassDetailResponse GetPublicClassById(Guid classId, Guid requestingUserId);
         GymClass? GetDeletedClassById(Guid id);
         GymClassResponse CreateClass(Guid trainerId, ClassRequest request);
-        void ModifyClass(Guid classId, ClassRequest request, Guid requestingUserId, string userRole);
-        void DeleteClass(Guid classId);
+        Task ModifyClassAsync(Guid classId, ClassRequest request, Guid requestingUserId, string userRole);
+        Task DeleteClassAsync(Guid classId);
         List<GymClassResponse> GetTrainerClasses(Guid trainerId, Guid requestingUserId, string userRole);
         Task JoinClassAsync(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
         void LeaveClass(Guid clientId, Guid classId, Guid requestingUserId, string userRole);
         List<ClientSummaryResponse> GetClientsByClass(Guid classId, Guid requestingUserId, string userRole);
+        List<ClientSummaryResponse> RecordAttendance(Guid classId, AttendanceRequest request, Guid requestingUserId, string userRole);
         ScheduledAndSpecialClassesResponse GetScheduledAndSpecialClasses();
     }
 }

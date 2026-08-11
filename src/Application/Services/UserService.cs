@@ -142,11 +142,17 @@ namespace GymManagement.Application.Services
 
             if (user is Client)
             {
-                detailedResponse.Inscriptions = _inscriptionRepository.GetByClientId(id).Select(i => new InscriptionResponse
-                {
-                    InscriptionId = i.InscriptionId,
-                    GymClassId = i.GymClassId
-                }).ToList();
+                detailedResponse.Inscriptions = _inscriptionRepository.GetByClientId(id)
+                    .OrderByDescending(i => i.GymClass.Schedule)
+                    .Select(i => new InscriptionResponse
+                    {
+                        InscriptionId = i.InscriptionId,
+                        GymClassId = i.GymClassId,
+                        ClassName = i.GymClass.ClassName,
+                        Schedule = i.GymClass.Schedule,
+                        AttendanceStatus = i.AttendanceStatus,
+                        AttendanceRecordedAt = i.AttendanceRecordedAt
+                    }).ToList();
             }
             else if (user is Trainer trainerEntity)
             {
@@ -246,7 +252,7 @@ namespace GymManagement.Application.Services
                 var inscriptions = _inscriptionRepository.GetByClientId(id);
                 foreach (var inscription in inscriptions)
                 {
-                    if (inscription.GymClass.Schedule > DateTime.UtcNow)
+                    if (inscription.GymClass.Schedule > GymTime.Now)
                         _inscriptionRepository.RemoveById(inscription.InscriptionId);
                     else
                         _inscriptionRepository.NullifyClientId(inscription.InscriptionId);
@@ -258,7 +264,7 @@ namespace GymManagement.Application.Services
             if (user is Trainer)
             {
                 var hasFutureClasses = _gymClassRepository.GetByTrainerId(id)
-                    .Any(gc => gc.Schedule > DateTime.UtcNow);
+                    .Any(gc => gc.Schedule > GymTime.Now);
                 if (hasFutureClasses)
                     throw new ConflictException(
                         "This trainer has future classes assigned. Reassign or delete them before changing their role.");

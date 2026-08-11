@@ -78,6 +78,14 @@ namespace GymManagement.Presentation.Controllers
             return Ok(clients);
         }
 
+        [HttpPatch("{classId}/attendance")]
+        [Authorize(Policy = Policies.AdminOrTrainer)]
+        public IActionResult RecordAttendance(Guid classId, [FromBody] AttendanceRequest request)
+        {
+            var roster = _gymClassService.RecordAttendance(classId, request, User.GetUserId(), User.GetUserRole());
+            return Ok(roster);
+        }
+
         [HttpGet("ClassesByTrainer/{trainerId}")]
         [Authorize(Policy = Policies.AdminOrTrainer)]
         public IActionResult GetTrainerClasses(Guid trainerId)
@@ -96,17 +104,17 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpPut("{classId}")]
         [Authorize(Policy = Policies.AdminOrTrainer)]
-        public IActionResult ModifyClass(Guid classId, [FromBody] ClassRequest request)
+        public async Task<IActionResult> ModifyClass(Guid classId, [FromBody] ClassRequest request)
         {
-            _gymClassService.ModifyClass(classId, request, User.GetUserId(), User.GetUserRole());
+            await _gymClassService.ModifyClassAsync(classId, request, User.GetUserId(), User.GetUserRole());
             return NoContent();
         }
 
         [HttpDelete("{classId}")]
         [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult DeleteClass(Guid classId)
+        public async Task<IActionResult> DeleteClass(Guid classId)
         {
-            _gymClassService.DeleteClass(classId);
+            await _gymClassService.DeleteClassAsync(classId);
             return NoContent();
         }
     }

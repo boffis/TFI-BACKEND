@@ -65,9 +65,9 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpDelete("{id}")]
         [Authorize(Policy = Policies.OnlyAdmin)]
-        public IActionResult DeleteSchedule(Guid id, [FromQuery] bool deleteUpcomingClasses = false)
+        public async Task<IActionResult> DeleteSchedule(Guid id, [FromQuery] bool deleteUpcomingClasses = false)
         {
-            _scheduleService.DeleteSchedule(id, deleteUpcomingClasses);
+            await _scheduleService.DeleteScheduleAsync(id, deleteUpcomingClasses);
             return NoContent();
         }
 

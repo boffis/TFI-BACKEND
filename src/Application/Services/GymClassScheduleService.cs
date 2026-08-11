@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using GymManagement.Application.Common;
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
@@ -15,17 +16,20 @@ namespace GymManagement.Application.Services
         private readonly IGymClassRepository _gymClassRepository;
         private readonly ITrainerRepository _trainerRepository;
         private readonly IInscriptionRepository _inscriptionRepository;
+        private readonly IClassNotificationService _notifications;
 
         public GymClassScheduleService(
             IGymClassScheduleRepository scheduleRepository,
             IGymClassRepository gymClassRepository,
             ITrainerRepository trainerRepository,
-            IInscriptionRepository inscriptionRepository)
+            IInscriptionRepository inscriptionRepository,
+            IClassNotificationService notifications)
         {
             _scheduleRepository = scheduleRepository;
             _gymClassRepository = gymClassRepository;
             _trainerRepository = trainerRepository;
             _inscriptionRepository = inscriptionRepository;
+            _notifications = notifications;
         }
 
         public List<GymClassScheduleResponse> GetAllSchedules()
@@ -63,7 +67,7 @@ namespace GymManagement.Application.Services
         {
             var schedule = _scheduleRepository.GetById(id) ?? throw new NotFoundException("Schedule not found.");
             var gymClasses = _gymClassRepository.GetAll()
-                .Where(gc => gc.GymClassScheduleId == id && gc.Schedule >= DateTime.UtcNow)
+                .Where(gc => gc.GymClassScheduleId == id && gc.Schedule >= GymTime.Now)
                 .ToList();
 
             return BuildScheduleDetailResponse(schedule, gymClasses);
@@ -173,7 +177,7 @@ namespace GymManagement.Application.Services
             if (updateUpcomingClasses)
             {
                 var upcomingClasses = _gymClassRepository.GetAll()
-                    .Where(gc => gc.GymClassScheduleId == scheduleId && gc.Schedule >= DateTime.UtcNow);
+                    .Where(gc => gc.GymClassScheduleId == scheduleId && gc.Schedule >= GymTime.Now);
 
                 foreach (var gymClass in upcomingClasses)
                 {
@@ -196,7 +200,7 @@ namespace GymManagement.Application.Services
             }
         }
 
-        public void DeleteSchedule(Guid scheduleId, bool deleteUpcomingClasses)
+        public async Task DeleteScheduleAsync(Guid scheduleId, bool deleteUpcomingClasses)
         {
             var schedule = _scheduleRepository.GetById(scheduleId) ?? throw new NotFoundException("Schedule not found.");
 
@@ -205,7 +209,12 @@ namespace GymManagement.Application.Services
             if (deleteUpcomingClasses)
             {
                 var upcomingClasses = _gymClassRepository.GetAll()
-                    .Where(gc => gc.GymClassScheduleId == scheduleId && gc.Schedule >= DateTime.UtcNow);
+                    .Where(gc => gc.GymClassScheduleId == scheduleId && gc.Schedule >= GymTime.Now)
+                    .ToList();
+
+                // One batch for every affected session, so a schedule with weeks of upcoming
+                // classes still costs a single SMTP connection rather than one per email.
+                await _notifications.NotifyClassesCancelledAsync(upcomingClasses);
 
                 foreach (var gymClass in upcomingClasses)
                 {
@@ -218,7 +227,10 @@ namespace GymManagement.Application.Services
         {
             var createdClasses = new List<GymClassResponse>();
             var activeSchedules = _scheduleRepository.GetActiveSchedules();
-            var startDate = DateTime.UtcNow.Date;
+            // Local date, not UTC: sessions are built as `date + schedule.TimeOfDay`, and
+            // TimeOfDay is a wall-clock time. Starting from the UTC date would generate for
+            // the wrong day whenever the two disagree (any evening in Argentina).
+            var startDate = GymTime.Today;
             var endDate = startDate.AddDays(daysAhead);
 
             foreach (var schedule in activeSchedules)

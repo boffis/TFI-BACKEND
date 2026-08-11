@@ -68,6 +68,12 @@ namespace GymManagement.Infrastructure.Repositories
                 .Where(i => i.ClientId == clientId)];
         }
 
+        public void UpdateRange(IEnumerable<Inscription> inscriptions)
+        {
+            _dbSet.UpdateRange(inscriptions);
+            _context.SaveChanges();
+        }
+
         public void NullifyClientId(Guid inscriptionId)
         {
             var inscription = _dbSet.FirstOrDefault(i => i.InscriptionId == inscriptionId);
