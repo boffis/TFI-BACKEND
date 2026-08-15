@@ -16,15 +16,18 @@ namespace GymManagement.Presentation.Controllers
     {
         private readonly PaymentService _paymentService;
         private readonly MercadoPagoService _mercadoPagoService;
+        private readonly MembershipService _membershipService;
         private readonly IServiceScopeFactory _scopeFactory;
 
         public PaymentController(
             PaymentService paymentService,
             MercadoPagoService mercadoPagoService,
+            MembershipService membershipService,
             IServiceScopeFactory scopeFactory)
         {
             _paymentService = paymentService;
             _mercadoPagoService = mercadoPagoService;
+            _membershipService = membershipService;
             _scopeFactory = scopeFactory;
         }
 
@@ -39,6 +42,18 @@ namespace GymManagement.Presentation.Controllers
             var payment = _paymentService.GetClientPayment(PaymentId);
             if (payment == null) return NotFound();
             return Ok(payment);
+        }
+
+        /// <summary>
+        /// Grants a client a membership paid in cash, in person. Activates the membership
+        /// immediately (no MP webhook to wait for) and logs a matching "cash"/"approved" Payment.
+        /// </summary>
+        [HttpPost("GrantCashMembership")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public async Task<IActionResult> GrantCashMembership([FromBody] MembershipRequest request)
+        {
+            var response = await _membershipService.GrantCashMembershipAsync(request);
+            return Ok(response);
         }
 
         /// <summary>

@@ -10,13 +10,16 @@ namespace GymManagement.Application.Services
     {
         private readonly IMembershipRepository _membershipRepository;
         private readonly IMembershipPlanRepository _membershipPlanRepository;
+        private readonly IPaymentRepository _paymentRepository;
 
         public MembershipService(
             IMembershipRepository membershipRepository,
-            IMembershipPlanRepository membershipPlanRepository)
+            IMembershipPlanRepository membershipPlanRepository,
+            IPaymentRepository paymentRepository)
         {
             _membershipRepository = membershipRepository;
             _membershipPlanRepository = membershipPlanRepository;
+            _paymentRepository = paymentRepository;
         }
 
         public async Task<List<Membership>> GetAllMemberships()
@@ -58,6 +61,69 @@ namespace GymManagement.Application.Services
             };
 
             await _membershipRepository.AddMembership(membership);
+
+            return new MembershipResponse
+            {
+                MembershipId = membership.MembershipId,
+                UserId = membership.UserId,
+                MembershipPlan = new MembershipPlanResponse
+                {
+                    MembershipPlanId = plan.MembershipPlanId,
+                    Type = plan.Type,
+                    Price = plan.Price,
+                    DurationInDays = plan.DurationInDays
+                },
+                ExpirationDate = membership.ExpirationDate,
+                IsCancelled = membership.IsCancelled
+            };
+        }
+
+        /// <summary>
+        /// Admin-only path for a client who paid in cash, outside Mercado Pago. Unlike
+        /// AddMembership (which starts the membership pending until the MP webhook activates it),
+        /// this activates it immediately since the cash payment was already received in person, and
+        /// records a matching Payment row so it shows up in the client's payment history.
+        /// </summary>
+        public async Task<MembershipResponse> GrantCashMembershipAsync(MembershipRequest request)
+        {
+            var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
+                ?? throw new NotFoundException("Membership plan not found.");
+
+            var existingMembership = await _membershipRepository.GetActiveByUserId(request.UserId);
+            if (existingMembership != null)
+            {
+                throw new ConflictException(existingMembership.ExpirationDate > DateTime.UtcNow
+                    ? "This user already has an active membership. Change the plan on the existing membership, or cancel it before creating a new one."
+                    : "This user already has a membership awaiting activation. Activate or cancel it before creating a new one.");
+            }
+
+            var membership = new Membership
+            {
+                MembershipId = Guid.NewGuid(),
+                UserId = request.UserId,
+                User = null!, // EF Core resolves navigation via FK
+                MembershipPlanId = request.MembershipPlanId,
+                MembershipPlan = plan,
+                ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays),
+                IsCancelled = false
+            };
+
+            await _membershipRepository.AddMembership(membership);
+
+            var payment = new Payment
+            {
+                PaymentId = Guid.NewGuid(),
+                UserId = request.UserId,
+                User = null!, // EF Core resolves navigation via FK
+                MembershipId = membership.MembershipId,
+                Membership = membership,
+                Price = plan.Price,
+                PaymentDate = DateTime.UtcNow,
+                PaymentMethod = "cash",
+                PaymentState = "approved"
+            };
+
+            _paymentRepository.AddPayment(payment);
 
             return new MembershipResponse
             {
