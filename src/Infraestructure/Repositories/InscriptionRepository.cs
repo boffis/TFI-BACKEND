@@ -65,6 +65,7 @@ namespace GymManagement.Infrastructure.Repositories
         {
             return [.. _dbSet
                 .Include(i => i.GymClass)
+                    .ThenInclude(gc => gc.Trainer)
                 .Where(i => i.ClientId == clientId)];
         }
 

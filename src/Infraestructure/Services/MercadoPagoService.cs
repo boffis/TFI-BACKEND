@@ -362,6 +362,25 @@ namespace GymManagement.Infrastructure.Payments
             if (membership.UserId != userId)
                 throw new UnauthorizedException("You don't have permission to cancel this membership.");
 
+            await CancelSubscriptionInternalAsync(membership);
+        }
+
+        /// <summary>
+        /// Admin-only path: revokes any client's membership regardless of ownership. Shares the
+        /// same Mercado Pago preapproval cancellation as the client self-service flow above, so a
+        /// revoked MP-billed membership actually stops billing instead of just flipping a flag here.
+        /// </summary>
+        public async Task AdminCancelSubscriptionAsync(Guid membershipId)
+        {
+            var membership = await _context.Memberships
+                .FirstOrDefaultAsync(m => m.MembershipId == membershipId)
+                ?? throw new NotFoundException($"Membership {membershipId} not found.");
+
+            await CancelSubscriptionInternalAsync(membership);
+        }
+
+        private async Task CancelSubscriptionInternalAsync(Membership membership)
+        {
             if (membership.IsCancelled)
                 throw new ConflictException("This membership is already cancelled.");
 

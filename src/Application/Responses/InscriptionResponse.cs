@@ -7,6 +7,7 @@ namespace GymManagement.Application.Responses
         public Guid InscriptionId { get; set; }
         public Guid GymClassId { get; set; }
         public string ClassName { get; set; } = string.Empty;
+        public string TrainerName { get; set; } = string.Empty;
         public DateTime Schedule { get; set; }
         public AttendanceStatus AttendanceStatus { get; set; } = AttendanceStatus.NotRecorded;
         public DateTime? AttendanceRecordedAt { get; set; }

@@ -149,6 +149,7 @@ namespace GymManagement.Application.Services
                         InscriptionId = i.InscriptionId,
                         GymClassId = i.GymClassId,
                         ClassName = i.GymClass.ClassName,
+                        TrainerName = i.GymClass.Trainer.Name,
                         Schedule = i.GymClass.Schedule,
                         AttendanceStatus = i.AttendanceStatus,
                         AttendanceRecordedAt = i.AttendanceRecordedAt

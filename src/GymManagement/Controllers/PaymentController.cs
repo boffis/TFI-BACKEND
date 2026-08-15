@@ -141,5 +141,17 @@ namespace GymManagement.Presentation.Controllers
             await _mercadoPagoService.CancelSubscriptionAsync(membershipId, userId);
             return Ok(new { message = "Suscripción cancelada exitosamente." });
         }
+
+        /// <summary>
+        /// Admin-only: revokes a client's membership regardless of who owns it. Cancels the
+        /// underlying Mercado Pago subscription too, if there is one, so billing actually stops.
+        /// </summary>
+        [HttpPost("AdminRevokeMembership/{membershipId}")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public async Task<IActionResult> AdminRevokeMembership(Guid membershipId)
+        {
+            await _mercadoPagoService.AdminCancelSubscriptionAsync(membershipId);
+            return Ok(new { message = "Membresía revocada exitosamente." });
+        }
     }
 }
