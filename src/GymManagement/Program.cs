@@ -159,25 +159,7 @@ using (var scope = app.Services.CreateScope())
         context.Database.Migrate();
     }
 
-    // Seed Admin
-    if (!context.Admins.Any(a => a.Email == "highlevelperformancegym@gmail.com"))
-    {
-        var admin = new GymManagement.Domain.Entities.Admin
-        {
-            UserId = Guid.NewGuid(),
-            Name = "GymAdmin",
-            Email = "highlevelperformancegym@gmail.com",
-            Password = BCrypt.Net.BCrypt.HashPassword("Admin1234"),
-            DateOfBirth = new DateOnly(2002, 6, 21),
-            DNI = "12345678",
-            Gender = "Other",
-            PhoneNumber = "3416150161",
-            IsUserDeleted = false,
-            IsEmailConfirmed = true
-        };
-        context.Admins.Add(admin);
-        context.SaveChanges();
-    }
+    
 }
 
 app.Run();
