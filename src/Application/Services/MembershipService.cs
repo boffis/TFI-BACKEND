@@ -36,18 +36,7 @@ namespace GymManagement.Application.Services
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
                 ?? throw new NotFoundException("Membership plan not found.");
 
-            // A client may hold at most one non-cancelled membership at a time. Switching plan or
-            // renewing goes through ChangeMembership (which resets ExpirationDate), and stopping
-            // goes through CancelMembership. Without this guard, repeated calls here stack up
-            // parallel membership rows for the same user and it becomes arbitrary which one counts
-            // as "theirs" — GetActiveByUserId just takes the first match.
-            var existingMembership = await _membershipRepository.GetActiveByUserId(request.UserId);
-            if (existingMembership != null)
-            {
-                throw new ConflictException(existingMembership.ExpirationDate > DateTime.UtcNow
-                    ? "This user already has an active membership. Change the plan on the existing membership, or cancel it before creating a new one."
-                    : "This user already has a membership awaiting activation. Activate or cancel it before creating a new one.");
-            }
+            await EnsureNoConflictingMembershipAsync(request.UserId);
 
             var membership = new Membership
             {
@@ -89,13 +78,7 @@ namespace GymManagement.Application.Services
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
                 ?? throw new NotFoundException("Membership plan not found.");
 
-            var existingMembership = await _membershipRepository.GetActiveByUserId(request.UserId);
-            if (existingMembership != null)
-            {
-                throw new ConflictException(existingMembership.ExpirationDate > DateTime.UtcNow
-                    ? "This user already has an active membership. Change the plan on the existing membership, or cancel it before creating a new one."
-                    : "This user already has a membership awaiting activation. Activate or cancel it before creating a new one.");
-            }
+            await EnsureNoConflictingMembershipAsync(request.UserId);
 
             var membership = new Membership
             {
@@ -181,6 +164,34 @@ namespace GymManagement.Application.Services
             membership.IsCancelled = true;
             await _membershipRepository.ChangeMembership(membership);
             return true;
+        }
+
+        /// <summary>
+        /// A client may hold at most one non-cancelled membership at a time. An existing membership
+        /// that is still active, or a Mercado Pago subscription still awaiting webhook activation
+        /// (ExpirationDate left at DateTime.MinValue), blocks creating a new one until it's changed
+        /// or cancelled. An expired membership no longer counts as "theirs" though — it's cancelled
+        /// here automatically so it can't be mistaken for the active one, and the caller is free to
+        /// create the replacement.
+        /// </summary>
+        private async Task EnsureNoConflictingMembershipAsync(Guid userId)
+        {
+            var existingMembership = await _membershipRepository.GetActiveByUserId(userId);
+            if (existingMembership == null) return;
+
+            var isPendingActivation = existingMembership.ExpirationDate == DateTime.MinValue;
+            var isExpired = !isPendingActivation && existingMembership.ExpirationDate <= DateTime.UtcNow;
+
+            if (isExpired)
+            {
+                existingMembership.IsCancelled = true;
+                await _membershipRepository.ChangeMembership(existingMembership);
+                return;
+            }
+
+            throw new ConflictException(isPendingActivation
+                ? "This user already has a membership awaiting activation. Activate or cancel it before creating a new one."
+                : "This user already has an active membership. Change the plan on the existing membership, or cancel it before creating a new one.");
         }
     }
 }

@@ -19,8 +19,6 @@ namespace GymManagement.Application.Responses
 
         public TimeSpan TimeOfDay { get; set; }
 
-        public bool IsWeekly { get; set; }
-
         public bool IsActive { get; set; }
 
         public TrainerSummaryResponse? Trainer { get; set; }

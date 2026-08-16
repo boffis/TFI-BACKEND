@@ -87,7 +87,6 @@ namespace GymManagement.Application.Services
                 MaxCapacity = schedule.MaxCapacity,
                 DayOfWeek = schedule.DayOfWeek,
                 TimeOfDay = schedule.TimeOfDay,
-                IsWeekly = schedule.IsWeekly,
                 IsActive = schedule.IsActive,
                 Trainer = new TrainerSummaryResponse
                 {
@@ -134,7 +133,6 @@ namespace GymManagement.Application.Services
                 Trainer = trainer,
                 DayOfWeek = request.DayOfWeek,
                 TimeOfDay = request.TimeOfDay,
-                IsWeekly = request.IsWeekly,
                 IsActive = true
             };
 
@@ -170,7 +168,6 @@ namespace GymManagement.Application.Services
             schedule.MaxCapacity = request.MaxCapacity;
             schedule.DayOfWeek = request.DayOfWeek;
             schedule.TimeOfDay = request.TimeOfDay;
-            schedule.IsWeekly = request.IsWeekly;
 
             _scheduleRepository.Update(schedule);
 
@@ -306,7 +303,6 @@ namespace GymManagement.Application.Services
                 TrainerId = schedule.TrainerId,
                 DayOfWeek = schedule.DayOfWeek,
                 TimeOfDay = schedule.TimeOfDay,
-                IsWeekly = schedule.IsWeekly,
                 IsActive = schedule.IsActive
             };
         }

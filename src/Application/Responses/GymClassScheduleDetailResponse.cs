@@ -11,7 +11,6 @@ namespace GymManagement.Application.Responses
         public required int MaxCapacity { get; set; }
         public DayOfWeek DayOfWeek { get; set; }
         public TimeSpan TimeOfDay { get; set; }
-        public bool IsWeekly { get; set; }
         public bool IsActive { get; set; }
         
         public TrainerSummaryResponse Trainer { get; set; } = null!;

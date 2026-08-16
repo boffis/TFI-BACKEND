@@ -21,9 +21,9 @@ namespace GymManagement.Domain.Entities
 
         public TimeSpan TimeOfDay { get; set; }
 
-        public bool IsWeekly { get; set; } = true;
-
         public bool IsActive { get; set; } = true;
+
+        public bool IsDeleted { get; set; } = false;
 
         public ICollection<GymClass> GymClasses { get; set; } = new List<GymClass>();
     }

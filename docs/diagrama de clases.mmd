@@ -1,63 +1,101 @@
-classDiagram
-    class USER {
-        int id
-        string Name
-        string Email
-        string Password
-        string UserRole
-        boolean IsUserDeleted
+erDiagram
+    USER ||--o| ADMIN : "is"
+    USER ||--o| CLIENT : "is"
+    USER ||--o| TRAINER : "is"
+    USER ||--o{ MEMBERSHIP : "has"
+    USER ||--o{ PAYMENT : "makes"
+    USER ||--o{ GYM_CLASS : "teaches (as trainer)"
+    USER ||--o{ GYM_CLASS_SCHEDULE : "teaches (as trainer)"
+    CLIENT ||--o{ INSCRIPTION : "enrolls in"
+    GYM_CLASS ||--o{ INSCRIPTION : "has enrollments"
+    GYM_CLASS_SCHEDULE ||--o{ GYM_CLASS : "generates"
+    MEMBERSHIP_PLAN ||--o{ MEMBERSHIP : "defines"
+    MEMBERSHIP ||--o{ PAYMENT : "is paid by"
+
+    USER {
+        uniqueidentifier UserId PK
+        nvarchar Name
+        nvarchar Email
+        nvarchar Password
+        date DateOfBirth
+        nvarchar DNI
+        nvarchar Gender
+        nvarchar PhoneNumber
+        bit IsUserDeleted
+        bit IsEmailConfirmed
+        nvarchar EmailConfirmationToken
+        datetime2 EmailConfirmationTokenExpiration
+        nvarchar PasswordResetToken
+        datetime2 PasswordResetTokenExpiration
     }
 
-    class CLIENT {
+    ADMIN {
+        uniqueidentifier UserId PK "FK -> User.UserId"
     }
 
-    class MEMBERSHIP {
-        int IdClient
-        string MembershipState
-        string MembershipType
-        float Price
-        date PaymentDate
-        date ExpirationDate
+    TRAINER {
+        uniqueidentifier UserId PK "FK -> User.UserId"
+        nvarchar Specialization
     }
 
-    class PROFESSOR {
-        string Specialization
+    CLIENT {
+        uniqueidentifier UserId PK "FK -> User.UserId"
     }
 
-    class ADMIN {
-    }
-
-    class PAYMENTS {
-        int IdPayment
-        int IdClient
-        float Price
-        date PaymentDate
-        string PaymentMethod
-        string PaymentState
-    }
-
-    class INSCRIPTIONS {
-        int ClientId
-        int ClassId
-        date ClassDate
-    }
-
-    class GYMCLASS {
-        int ClassId
-        string Name
-        string Description
+    GYM_CLASS {
+        uniqueidentifier GymClassId PK
+        nvarchar ClassName
+        nvarchar ClassDescription
         int MaxCapacity
-        string Schedule
+        uniqueidentifier TrainerId FK "-> User.UserId"
+        datetime2 Schedule
+        uniqueidentifier GymClassScheduleId FK "-> GymClassSchedule, nullable"
+        bit IsClassDeleted
     }
 
-    %% Relaciones de herencia
-    CLIENT -- USER
-    PROFESSOR -- USER
-    ADMIN -- USER
+    GYM_CLASS_SCHEDULE {
+        uniqueidentifier GymClassScheduleId PK
+        nvarchar ClassName
+        nvarchar ClassDescription
+        int MaxCapacity
+        uniqueidentifier TrainerId FK "-> User.UserId"
+        int DayOfWeek
+        time TimeOfDay
+        bit IsWeekly
+        bit IsActive
+    }
 
-    %% Relaciones de asociación
-    CLIENT 1 -- 1 MEMBERSHIP 
-    CLIENT 1 -- 0.. PAYMENTS 
-    CLIENT 1 -- 0.. INSCRIPTIONS 
-    GYMCLASS 1 -- 0.. INSCRIPTIONS 
-    PROFESSOR 1 -- 0.. GYMCLASS
+    INSCRIPTION {
+        uniqueidentifier InscriptionId PK
+        uniqueidentifier ClientId FK "-> Client.UserId, nullable"
+        uniqueidentifier GymClassId FK "-> GymClass.GymClassId"
+        int AttendanceStatus
+        datetime2 AttendanceRecordedAt
+    }
+
+    MEMBERSHIP {
+        uniqueidentifier MembershipId PK
+        uniqueidentifier UserId FK "-> User.UserId"
+        uniqueidentifier MembershipPlanId FK "-> MembershipPlan.MembershipPlanId"
+        bit IsCancelled
+        datetime2 ExpirationDate
+        nvarchar MpPreapprovalId
+    }
+
+    MEMBERSHIP_PLAN {
+        uniqueidentifier MembershipPlanId PK
+        nvarchar Type
+        decimal Price
+        int DurationInDays
+    }
+
+    PAYMENT {
+        uniqueidentifier PaymentId PK
+        uniqueidentifier UserId FK "-> User.UserId"
+        uniqueidentifier MembershipId FK "-> Membership.MembershipId"
+        decimal Price
+        datetime2 PaymentDate
+        nvarchar PaymentMethod
+        nvarchar PaymentState
+        nvarchar MpPaymentId
+    }

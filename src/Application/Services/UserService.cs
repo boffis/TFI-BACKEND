@@ -214,6 +214,16 @@ namespace GymManagement.Application.Services
             var user = GetUserEntityById(id);
             if (user == null) return false;
 
+            // For Trainers: block if they still have future classes assigned
+            if (user is Trainer)
+            {
+                var hasFutureClasses = _gymClassRepository.GetByTrainerId(id)
+                    .Any(gc => gc.Schedule > GymTime.Now);
+                if (hasFutureClasses)
+                    throw new ConflictException(
+                        "This trainer has future classes assigned. Reassign or delete them before deleting their account.");
+            }
+
             if (user is Client) _clientRepository.Delete(id);
             else if (user is Trainer) _trainerRepository.Delete(id);
             else if (user is Admin) _adminRepository.Delete(id);

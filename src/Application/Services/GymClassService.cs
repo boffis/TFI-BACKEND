@@ -127,7 +127,6 @@ namespace GymManagement.Application.Services
                 TrainerId = s.TrainerId,
                 DayOfWeek = s.DayOfWeek,
                 TimeOfDay = s.TimeOfDay,
-                IsWeekly = s.IsWeekly,
                 IsActive = s.IsActive,
                 Trainer = s.Trainer == null ? null : new TrainerSummaryResponse
                 {

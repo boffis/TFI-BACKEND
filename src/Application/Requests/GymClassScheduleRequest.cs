@@ -14,8 +14,6 @@ namespace GymManagement.Application.Requests
 
         public TimeSpan TimeOfDay { get; set; }
 
-        public bool IsWeekly { get; set; } = true;
-
         public Guid TrainerId { get; set; }
     }
 }
