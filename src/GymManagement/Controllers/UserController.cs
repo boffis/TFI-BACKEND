@@ -68,7 +68,7 @@ namespace GymManagement.Presentation.Controllers
 
         [HttpDelete("{id}")]
         [Authorize]
-        public IActionResult Delete(Guid id)
+        public async Task<IActionResult> Delete(Guid id)
         {
             var currentUserId = User.GetUserId();
             var currentUserRole = User.GetUserRole();
@@ -78,7 +78,7 @@ namespace GymManagement.Presentation.Controllers
                 return Forbid();
             }
 
-            var success = _userService.Delete(id);
+            var success = await _userService.DeleteAsync(id);
             return success ? NoContent() : NotFound();
         }
 

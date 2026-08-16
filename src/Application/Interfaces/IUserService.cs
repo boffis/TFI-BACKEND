@@ -11,7 +11,7 @@ namespace GymManagement.Application.Interfaces
         Task<GetAllUsersResponse> GetAllAsync();
         List<UserResponse> GetAllDeleted();
         bool Update(Guid id, UserRequest request);
-        bool Delete(Guid id);
+        Task<bool> DeleteAsync(Guid id);
         bool Recover(Guid id);
         Task<bool> ChangeRoleAsync(Guid id, string newRole, string? specialization = null);
         List<ActiveTrainerResponse> GetActiveTrainers();

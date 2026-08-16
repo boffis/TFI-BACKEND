@@ -235,7 +235,9 @@ namespace GymManagement.Application.Services
                 ?? throw new NotFoundException("Class not found.");
 
             // Notify first: the roster has to be readable, and this never throws.
-            await _notifications.NotifyClassesCancelledAsync([gymClass]);
+            // Only future classes are worth an email — a past class's attendees already attended (or didn't).
+            if (gymClass.Schedule >= GymTime.Now)
+                await _notifications.NotifyClassesCancelledAsync([gymClass]);
 
             _gymClassRepository.Delete(classId);
         }
