@@ -174,7 +174,12 @@ namespace GymManagement.Application.Services
         /// here automatically so it can't be mistaken for the active one, and the caller is free to
         /// create the replacement.
         /// </summary>
-        private async Task EnsureNoConflictingMembershipAsync(Guid userId)
+        /// <param name="selfService">
+        /// True when the client is buying for themselves, so the conflict is phrased for them and
+        /// points at the cancel button on their account page. False for the admin paths, which speak
+        /// about the client in the third person and can also just switch the existing plan.
+        /// </param>
+        public async Task EnsureNoConflictingMembershipAsync(Guid userId, bool selfService = false)
         {
             var existingMembership = await _membershipRepository.GetActiveByUserId(userId);
             if (existingMembership == null) return;
@@ -187,6 +192,13 @@ namespace GymManagement.Application.Services
                 existingMembership.IsCancelled = true;
                 await _membershipRepository.ChangeMembership(existingMembership);
                 return;
+            }
+
+            if (selfService)
+            {
+                throw new ConflictException(isPendingActivation
+                    ? "You already have a membership awaiting activation. Cancel it from your account before subscribing to a new plan."
+                    : "You already have an active membership. Cancel it from your account before subscribing to a new plan.");
             }
 
             throw new ConflictException(isPendingActivation

@@ -2,6 +2,8 @@ using GymManagement.Application.Common;
 using GymManagement.Application.Exceptions;
 using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
+using GymManagement.Application.Responses;
+using GymManagement.Application.Services;
 using GymManagement.Domain.Entities;
 using GymManagement.Infrastructure.Persistence;
 using GymManagement.Infrastructure.Settings;
@@ -30,19 +32,22 @@ namespace GymManagement.Infrastructure.Payments
         private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly ILogger<MercadoPagoService> _logger;
+        private readonly MembershipService _membershipService;
 
         public MercadoPagoService(
             IOptions<MercadoPagoSettings> settings,
             ApplicationDbContext context,
             Microsoft.Extensions.Configuration.IConfiguration configuration,
             IHttpClientFactory httpClientFactory,
-            ILogger<MercadoPagoService> logger)
+            ILogger<MercadoPagoService> logger,
+            MembershipService membershipService)
         {
             _settings = settings.Value;
             _context = context;
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
+            _membershipService = membershipService;
             MercadoPagoConfig.AccessToken = _settings.AccessToken?.Trim();
         }
 
@@ -204,6 +209,18 @@ namespace GymManagement.Infrastructure.Payments
                 .FirstOrDefaultAsync(p => p.MembershipPlanId == request.MembershipPlanId)
                 ?? throw new NotFoundException($"Plan {request.MembershipPlanId} not found.");
 
+            // Read the client's current membership before the conflict check runs: the check
+            // cancels an expired one, which would hide it from the Step 2 lookup below and leave
+            // its Mercado Pago subscription billing the card forever.
+            var previousMembership = await _context.Memberships
+                .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
+
+            // One membership per client, refused here rather than after Step 1: throwing once the
+            // preapproval exists would leave a live subscription charging a client we just said
+            // "no" to. A still-valid membership throws ConflictException (HTTP 409) and the client
+            // is told to cancel it first; an expired one is cancelled to make room.
+            await _membershipService.EnsureNoConflictingMembershipAsync(userId, selfService: true);
+
             // ── Step 1: Create Preapproval (subscription) in Mercado Pago via raw HTTP ──
             // The SDK v3.3.0 is missing card_token_id on PreapprovalCreateRequest,
             // so we call the API directly with HttpClient to include all required fields.
@@ -273,11 +290,12 @@ namespace GymManagement.Infrastructure.Payments
                 throw new ValidationException("We couldn't set up your subscription. Please try again or contact support.");
             }
 
-            // ── Step 2: Cancel any previous preapproval in MP to avoid duplicates ────
-            var membership = await _context.Memberships
-                .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
-
-            if (membership != null && !string.IsNullOrEmpty(membership.MpPreapprovalId))
+            // ── Step 2: Cancel the previous preapproval in MP to avoid duplicates ────
+            // Only an expired membership can still be here — a valid one threw above — but its
+            // subscription may well be alive at Mercado Pago (that is how a membership expires
+            // without being cancelled: the renewal charge stopped going through). Cancel it, or
+            // the card gets charged for both the old plan and the new one.
+            if (previousMembership != null && !string.IsNullOrEmpty(previousMembership.MpPreapprovalId))
             {
                 try
                 {
@@ -287,7 +305,7 @@ namespace GymManagement.Infrastructure.Payments
                     var cancelBody = JsonSerializer.Serialize(new { status = "cancelled" });
                     var cancelContent = new StringContent(cancelBody, Encoding.UTF8, "application/json");
                     await cancelHttp.PutAsync(
-                        $"https://api.mercadopago.com/preapproval/{membership.MpPreapprovalId}",
+                        $"https://api.mercadopago.com/preapproval/{previousMembership.MpPreapprovalId}",
                         cancelContent);
                 }
                 catch { /* best-effort: if old preapproval is already gone, ignore */ }
@@ -296,29 +314,24 @@ namespace GymManagement.Infrastructure.Payments
             // ── Step 3: Activate the membership locally ────────────────────────────
             // MP automatically charges the card within 1 hour of subscription creation.
             // We record the membership and a pending payment locally.
-
-            if (membership == null)
+            // Always a new row: the conflict check leaves no non-cancelled membership behind, so
+            // there is nothing to reuse, and each subscription keeps its own history — same as the
+            // admin paths in MembershipService.
+            var membership = new Membership
             {
-                membership = new Membership
-                {
-                    MembershipId = Guid.NewGuid(),
-                    UserId = userId,
-                    User = null!,
-                    MembershipPlanId = plan.MembershipPlanId,
-                    MembershipPlan = null!
-                };
-                _context.Memberships.Add(membership);
-            }
-            else
-            {
-                membership.MembershipPlanId = plan.MembershipPlanId;
-            }
+                MembershipId = Guid.NewGuid(),
+                UserId = userId,
+                User = null!,
+                MembershipPlanId = plan.MembershipPlanId,
+                MembershipPlan = null!,
+                IsCancelled = false,
+                MpPreapprovalId = preapprovalId,
+                // ExpirationDate will be updated by webhook when MP confirms the payment.
+                // Set a provisional expiration based on plan duration.
+                ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays)
+            };
 
-            membership.IsCancelled = false;
-            membership.MpPreapprovalId = preapprovalId;
-            // ExpirationDate will be updated by webhook when MP confirms the payment.
-            // Set a provisional expiration based on plan duration.
-            membership.ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays);
+            _context.Memberships.Add(membership);
 
             var localPayment = new Payment
             {
@@ -337,12 +350,25 @@ namespace GymManagement.Infrastructure.Payments
             _context.Payments.Add(localPayment);
             await _context.SaveChangesAsync();
 
+            // The payment is returned in the same shape login serves it (UserService:120), so the
+            // client can append it to its cached user without a round trip and end up with exactly
+            // what it would get after signing out and back in.
             return new
             {
                 preapprovalId = preapprovalId,
                 paymentStatus = "pending",
                 membershipId = membership.MembershipId,
-                expirationDate = membership.ExpirationDate
+                expirationDate = membership.ExpirationDate,
+                payment = new PaymentResponse
+                {
+                    PaymentId = localPayment.PaymentId,
+                    UserId = localPayment.UserId,
+                    MembershipId = localPayment.MembershipId,
+                    Price = localPayment.Price,
+                    PaymentDate = localPayment.PaymentDate,
+                    PaymentMethod = localPayment.PaymentMethod,
+                    PaymentState = localPayment.PaymentState
+                }
             };
         }
 
