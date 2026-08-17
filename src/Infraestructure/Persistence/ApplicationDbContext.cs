@@ -1,5 +1,6 @@
 using GymManagement.Domain.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace GymManagement.Infrastructure.Persistence
 {
@@ -110,6 +111,35 @@ namespace GymManagement.Infrastructure.Persistence
                 .WithMany(gc => gc.Inscriptions)
                 .HasForeignKey(i => i.GymClassId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ── UTC instants ────────────────────────────────────────────────────────
+            // datetime2 stores no offset, so EF materialises these as DateTimeKind.Unspecified
+            // and System.Text.Json then writes them without a trailing "Z". A browser parses a
+            // date-time with no offset as *local* time, so every UTC timestamp read back from the
+            // database rendered three hours into the future for a client in Argentina.
+            // Re-tagging them on the way out makes the serialiser emit the "Z" again.
+            //
+            // Only real instants belong here. GymClass.Schedule and GymClassSchedule.TimeOfDay are
+            // deliberately the gym's local wall clock (see Application/Common/GymTime.cs) and must
+            // keep serialising without a zone — tagging those would shift every class by the gym's
+            // offset. The token expiries on User are UTC too but are never serialised, and are only
+            // ever compared against DateTime.UtcNow server-side, where Kind is irrelevant.
+            var utcInstant = new ValueConverter<DateTime, DateTime>(
+                write => write,
+                read => DateTime.SpecifyKind(read, DateTimeKind.Utc));
+
+            modelBuilder.Entity<Payment>()
+                .Property(p => p.PaymentDate)
+                .HasConversion(utcInstant);
+
+            modelBuilder.Entity<Membership>()
+                .Property(m => m.ExpirationDate)
+                .HasConversion(utcInstant);
+
+            // Nullable property, non-nullable converter: EF applies it only to non-null values.
+            modelBuilder.Entity<Inscription>()
+                .Property(i => i.AttendanceRecordedAt)
+                .HasConversion(utcInstant);
         }
     }
 }
