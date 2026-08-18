@@ -146,6 +146,7 @@ namespace GymManagement.Application.Services
                     MaxCapacity = gc.MaxCapacity,
                     TrainerId = gc.TrainerId,
                     Schedule = gc.Schedule,
+                    GymClassScheduleId = gc.GymClassScheduleId,
                     Trainer = gc.Trainer == null ? null : new TrainerSummaryResponse
                     {
                         TrainerId = gc.Trainer.UserId,
@@ -185,7 +186,8 @@ namespace GymManagement.Application.Services
                 ClassDescription = gymClass.ClassDescription,
                 MaxCapacity = gymClass.MaxCapacity,
                 TrainerId = gymClass.TrainerId,
-                Schedule = gymClass.Schedule
+                Schedule = gymClass.Schedule,
+                GymClassScheduleId = gymClass.GymClassScheduleId
             };
         }
 
@@ -257,7 +259,8 @@ namespace GymManagement.Application.Services
                 ClassDescription = gc.ClassDescription,
                 MaxCapacity = gc.MaxCapacity,
                 TrainerId = gc.TrainerId,
-                Schedule = gc.Schedule
+                Schedule = gc.Schedule,
+                GymClassScheduleId = gc.GymClassScheduleId
             })];
         }
 

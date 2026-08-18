@@ -36,6 +36,18 @@ namespace GymManagement.Controllers
             return Ok(plan);
         }
 
+        /// <summary>
+        /// Admin listing. Unlike the anonymous GetAll above, this includes discontinued plans
+        /// (flagged with IsDeleted) so they can be reviewed or restored from the dashboard.
+        /// </summary>
+        [HttpGet("admin")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public async Task<ActionResult<IEnumerable<MembershipPlanResponse>>> GetAllForAdmin()
+        {
+            var plans = await _membershipPlanService.GetAllPlansForAdminAsync();
+            return Ok(plans);
+        }
+
         [HttpGet("admin/{id}")]
         [Authorize(Policy = Policies.OnlyAdmin)]
         public async Task<ActionResult<AdminMembershipPlanResponse>> GetAdminById(Guid id)
@@ -60,11 +72,23 @@ namespace GymManagement.Controllers
             return Ok(plan);
         }
 
+        /// <summary>
+        /// Discontinues the plan (soft delete). Existing subscribers keep their membership until it
+        /// expires; only the recurring charge stops. See MembershipPlanService.DeletePlanAsync.
+        /// </summary>
         [HttpDelete("{id}")]
         [Authorize(Policy = Policies.OnlyAdmin)]
         public async Task<ActionResult> Delete(Guid id)
         {
             await _membershipPlanService.DeletePlanAsync(id);
+            return NoContent();
+        }
+
+        [HttpPost("{id}/restore")]
+        [Authorize(Policy = Policies.OnlyAdmin)]
+        public async Task<ActionResult> Restore(Guid id)
+        {
+            await _membershipPlanService.RestorePlanAsync(id);
             return NoContent();
         }
     }

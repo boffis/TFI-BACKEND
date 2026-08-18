@@ -67,6 +67,11 @@ namespace GymManagement.Infrastructure.Persistence
                 .Property(mp => mp.Price)
                 .HasColumnType("decimal(10,2)");
 
+            // Discontinued plans are filtered per-query in MembershipPlanRepository rather than by a
+            // global query filter: the admin list, the admin detail page and the membership history
+            // all need to read them back, and a global filter would silently drop the MembershipPlan
+            // navigation from every Membership pointing at a discontinued plan.
+
             // GymClass → User (TrainerId points at Users, not Trainers — preserves history across role changes)
             modelBuilder.Entity<GymClass>()
                 .HasOne(gc => gc.Trainer)

@@ -24,6 +24,13 @@ namespace GymManagement.Application.Interfaces
 
         Task ChangeMembership(Membership membership);
 
+        /// <summary>
+        /// Persists only the renewal flag. GetByPlanId includes the User navigation, and
+        /// ChangeMembership's DbSet.Update marks the whole tracked graph as modified — which would
+        /// rewrite every subscriber's User row just to turn one boolean off.
+        /// </summary>
+        Task SetAutoRenewAsync(Membership membership, bool autoRenew);
+
         Task CancelMembership(Guid membershipId);
     }
 }

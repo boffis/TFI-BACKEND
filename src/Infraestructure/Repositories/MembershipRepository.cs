@@ -57,6 +57,13 @@ namespace GymManagement.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
+        public async Task SetAutoRenewAsync(Membership membership, bool autoRenew)
+        {
+            membership.AutoRenew = autoRenew;
+            _context.Entry(membership).Property(m => m.AutoRenew).IsModified = true;
+            await _context.SaveChangesAsync();
+        }
+
         public async Task CancelMembership(Guid membershipId)
         {
             var membership = await GetMembershipById(membershipId);

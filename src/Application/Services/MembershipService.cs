@@ -36,6 +36,9 @@ namespace GymManagement.Application.Services
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
                 ?? throw new NotFoundException("Membership plan not found.");
 
+            if (plan.IsDeleted)
+                throw new ConflictException("This membership plan is no longer available.");
+
             await EnsureNoConflictingMembershipAsync(request.UserId);
 
             var membership = new Membership
@@ -77,6 +80,9 @@ namespace GymManagement.Application.Services
         {
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId)
                 ?? throw new NotFoundException("Membership plan not found.");
+
+            if (plan.IsDeleted)
+                throw new ConflictException("This membership plan is no longer available.");
 
             await EnsureNoConflictingMembershipAsync(request.UserId);
 
@@ -129,8 +135,12 @@ namespace GymManagement.Application.Services
             var existingMembership = await _membershipRepository.GetMembershipById(membershipId);
             if (existingMembership == null) return false;
 
+            // A discontinued plan is refused here as well: moving a client onto one would hand them
+            // a membership that renews on a plan the gym no longer sells. ActivateMembershipAsync
+            // deliberately does not check this — it finishes activating memberships that were
+            // already bought, which must still work after the plan is discontinued.
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId);
-            if (plan == null) return false;
+            if (plan == null || plan.IsDeleted) return false;
 
             existingMembership.MembershipPlanId = request.MembershipPlanId;
             existingMembership.MembershipPlan = plan;

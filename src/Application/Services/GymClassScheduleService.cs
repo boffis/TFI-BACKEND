@@ -263,7 +263,8 @@ namespace GymManagement.Application.Services
                                 ClassDescription = added.ClassDescription,
                                 MaxCapacity = added.MaxCapacity,
                                 TrainerId = added.TrainerId,
-                                Schedule = added.Schedule
+                                Schedule = added.Schedule,
+                                GymClassScheduleId = added.GymClassScheduleId
                             });
                         }
                     }

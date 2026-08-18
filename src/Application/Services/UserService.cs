@@ -173,7 +173,8 @@ namespace GymManagement.Application.Services
                     ClassDescription = c.ClassDescription,
                     MaxCapacity = c.MaxCapacity,
                     TrainerId = c.TrainerId,
-                    Schedule = c.Schedule
+                    Schedule = c.Schedule,
+                    GymClassScheduleId = c.GymClassScheduleId
                 }).ToList();
             }
 

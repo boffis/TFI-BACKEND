@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using GymManagement.Application.Interfaces;
 using GymManagement.Domain.Entities;
@@ -18,6 +19,13 @@ namespace GymManagement.Infrastructure.Repositories
         }
 
         public async Task<IEnumerable<MembershipPlan>> GetAllAsync()
+        {
+            return await _context.MembershipPlans
+                .Where(p => !p.IsDeleted)
+                .ToListAsync();
+        }
+
+        public async Task<IEnumerable<MembershipPlan>> GetAllIncludingDiscontinuedAsync()
         {
             return await _context.MembershipPlans.ToListAsync();
         }
@@ -40,12 +48,25 @@ namespace GymManagement.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
+        // Soft delete. A hard Remove() would be refused by SQL Server anyway: Memberships references
+        // MembershipPlans with ReferentialAction.Restrict, so any plan a client ever subscribed to
+        // — even a long-cancelled membership — can never be physically deleted.
         public async Task DeleteAsync(Guid id)
         {
             var plan = await _context.MembershipPlans.FindAsync(id);
-            if (plan != null)
+            if (plan != null && !plan.IsDeleted)
             {
-                _context.MembershipPlans.Remove(plan);
+                plan.IsDeleted = true;
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        public async Task RestoreAsync(Guid id)
+        {
+            var plan = await _context.MembershipPlans.FindAsync(id);
+            if (plan != null && plan.IsDeleted)
+            {
+                plan.IsDeleted = false;
                 await _context.SaveChangesAsync();
             }
         }

@@ -209,6 +209,11 @@ namespace GymManagement.Infrastructure.Payments
                 .FirstOrDefaultAsync(p => p.MembershipPlanId == request.MembershipPlanId)
                 ?? throw new NotFoundException($"Plan {request.MembershipPlanId} not found.");
 
+            // Checked before any preapproval exists: a client sitting on a stale pricing page must
+            // not be able to start a subscription to a plan that is no longer offered.
+            if (plan.IsDeleted)
+                throw new ConflictException("This membership plan is no longer available.");
+
             // Read the client's current membership before the conflict check runs: the check
             // cancels an expired one, which would hide it from the Step 2 lookup below and leave
             // its Mercado Pago subscription billing the card forever.
@@ -410,7 +415,11 @@ namespace GymManagement.Infrastructure.Payments
             if (membership.IsCancelled)
                 throw new ConflictException("This membership is already cancelled.");
 
-            if (!string.IsNullOrEmpty(membership.MpPreapprovalId))
+            // AutoRenew == false means the preapproval was already cancelled at Mercado Pago when the
+            // plan was discontinued. Asking MP to cancel it a second time can come back as an error
+            // that isn't a 404, which would throw here and leave the client unable to cancel a
+            // membership that has nothing left to bill — so skip straight to the local cancellation.
+            if (!string.IsNullOrEmpty(membership.MpPreapprovalId) && membership.AutoRenew)
             {
                 // Use the named HttpClient which carries the Polly retry policy.
                 // We call the MP REST API directly (PUT /preapproval/{id}) because the SDK
@@ -450,6 +459,57 @@ namespace GymManagement.Infrastructure.Payments
             membership.IsCancelled = true;
             await _context.SaveChangesAsync();
             await RemoveFutureInscriptionsAsync(membership.UserId);
+        }
+
+        /// <summary>
+        /// Cancels the preapproval so no further charge is ever attempted, without touching the
+        /// membership row. This is the "discontinue" half of a cancellation: unlike
+        /// CancelSubscriptionInternalAsync it leaves IsCancelled false and keeps the client's
+        /// future class inscriptions, so access simply runs out at ExpirationDate.
+        /// Best-effort: logs and returns false instead of throwing, so one stale preapproval
+        /// doesn't abort discontinuing the plan for everyone else on it.
+        /// </summary>
+        public async Task<bool> StopAutoRenewalAsync(string preapprovalId)
+        {
+            try
+            {
+                var http = _httpClientFactory.CreateClient("MercadoPago");
+                http.DefaultRequestHeaders.Clear();
+                http.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.AccessToken?.Trim()}");
+
+                var body = JsonSerializer.Serialize(new { status = "cancelled" });
+                var content = new StringContent(body, Encoding.UTF8, "application/json");
+
+                var response = await http.PutAsync(
+                    $"https://api.mercadopago.com/preapproval/{preapprovalId}",
+                    content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+
+                    // Same reasoning as CancelSubscriptionInternalAsync: a preapproval MP no longer
+                    // has is already not going to charge anyone, which is exactly the outcome asked for.
+                    bool resourceGone = response.StatusCode == System.Net.HttpStatusCode.NotFound
+                        || error.Contains("resource not found", StringComparison.OrdinalIgnoreCase);
+
+                    if (resourceGone) return true;
+
+                    _logger.LogWarning(
+                        "[MercadoPago] Failed to stop auto-renewal on preapproval {PreapprovalId} (HTTP {StatusCode}): {Error}",
+                        preapprovalId, (int)response.StatusCode, error);
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "[MercadoPago] Error stopping auto-renewal on preapproval {PreapprovalId}",
+                    preapprovalId);
+                return false;
+            }
         }
 
         /// <summary>
@@ -771,7 +831,13 @@ namespace GymManagement.Infrastructure.Payments
                     // a rejected-payment webhook (see the payment.status == rejected/cancelled branch
                     // above) whenever the two notifications race. There is no reactivate/resume
                     // feature in this app that depends on the opposite transition.
-                    bool justCancelled = !membership.IsCancelled &&
+                    // AutoRenew == false means we cancelled this preapproval ourselves to stop the
+                    // recurring charge while deliberately keeping the membership alive to its
+                    // expiration date (an admin discontinued the plan). The "cancelled" notification
+                    // that arrives moments later is the echo of our own request, not the client
+                    // walking away — acting on it would revoke access we just promised to keep and
+                    // wipe their future class inscriptions.
+                    bool justCancelled = !membership.IsCancelled && membership.AutoRenew &&
                         (preapproval.Status == "cancelled" || preapproval.Status == "paused");
 
                     if (justCancelled)

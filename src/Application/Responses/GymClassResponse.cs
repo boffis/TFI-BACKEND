@@ -28,6 +28,13 @@ namespace GymManagement.Application.Responses
 
         public DateTime Schedule { get; set; }
 
+        /// <summary>
+        /// The recurring schedule this session was generated from, or <c>null</c> when the class is a
+        /// one-off ("special") class created on its own. Clients use the null-ness to tell the two
+        /// apart, so every mapping must set it from the entity rather than leave it to default.
+        /// </summary>
+        public Guid? GymClassScheduleId { get; set; }
+
         public TrainerSummaryResponse? Trainer { get; set; }
     }
 }
