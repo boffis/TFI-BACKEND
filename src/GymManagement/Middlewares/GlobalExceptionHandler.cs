@@ -28,6 +28,7 @@ namespace GymManagement.Presentation.Middlewares
                 ConflictException => ((int)HttpStatusCode.Conflict, "Conflict", "This action couldn't be completed."),
                 NotFoundException => ((int)HttpStatusCode.NotFound, "Not found", "The requested resource was not found."),
                 ValidationException => ((int)HttpStatusCode.BadRequest, "Validation error", "There was a validation error in the request."),
+                BillingUnavailableException => ((int)HttpStatusCode.BadGateway, "Bad gateway", "The payment provider is unavailable. Please try again later."),
                 _ => ((int)HttpStatusCode.InternalServerError, "Internal server error", "Something went wrong. Please try again later.")
             };
 
@@ -40,7 +41,8 @@ namespace GymManagement.Presentation.Middlewares
                 or ForbiddenException
                 or ConflictException
                 or NotFoundException
-                or ValidationException;
+                or ValidationException
+                or BillingUnavailableException;
 
             string detail = isKnownAppException && !string.IsNullOrWhiteSpace(exception.Message)
                 ? exception.Message

@@ -3,6 +3,7 @@ using GymManagement.Application.Interfaces;
 using GymManagement.Application.Requests;
 using GymManagement.Application.Responses;
 using GymManagement.Domain.Entities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace GymManagement.Application.Services
 {
@@ -11,15 +12,18 @@ namespace GymManagement.Application.Services
         private readonly IMembershipRepository _membershipRepository;
         private readonly IMembershipPlanRepository _membershipPlanRepository;
         private readonly IPaymentRepository _paymentRepository;
+        private readonly IServiceProvider _serviceProvider;
 
         public MembershipService(
             IMembershipRepository membershipRepository,
             IMembershipPlanRepository membershipPlanRepository,
-            IPaymentRepository paymentRepository)
+            IPaymentRepository paymentRepository,
+            IServiceProvider serviceProvider)
         {
             _membershipRepository = membershipRepository;
             _membershipPlanRepository = membershipPlanRepository;
             _paymentRepository = paymentRepository;
+            _serviceProvider = serviceProvider;
         }
 
         public async Task<List<Membership>> GetAllMemberships()
@@ -180,9 +184,17 @@ namespace GymManagement.Application.Services
         /// A client may hold at most one non-cancelled membership at a time. An existing membership
         /// that is still active, or a Mercado Pago subscription still awaiting webhook activation
         /// (ExpirationDate left at DateTime.MinValue), blocks creating a new one until it's changed
-        /// or cancelled. An expired membership no longer counts as "theirs" though — it's cancelled
+        /// or cancelled. An expired membership no longer counts as "theirs" though — it's retired
         /// here automatically so it can't be mistaken for the active one, and the caller is free to
         /// create the replacement.
+        /// <para>
+        /// Retiring goes through the billing service rather than just setting IsCancelled: a
+        /// membership normally expires *because* its renewal charge kept failing, so its Mercado Pago
+        /// preapproval is usually still live and would carry on billing a client whose membership
+        /// reads as cancelled everywhere in the app. If Mercado Pago cannot confirm the cancellation
+        /// this throws BillingUnavailableException and nothing is persisted, failing the caller's
+        /// whole operation rather than leaving an orphaned subscription behind.
+        /// </para>
         /// </summary>
         /// <param name="selfService">
         /// True when the client is buying for themselves, so the conflict is phrased for them and
@@ -199,8 +211,13 @@ namespace GymManagement.Application.Services
 
             if (isExpired)
             {
-                existingMembership.IsCancelled = true;
-                await _membershipRepository.ChangeMembership(existingMembership);
+                // Resolved here rather than through the constructor: the IMembershipBillingService
+                // implementation (MercadoPagoService) takes this class as a dependency, so
+                // constructor-injecting it would make the two a cycle the DI container refuses to
+                // build. By the time this runs both are already constructed and cached in the
+                // request scope, so this just hands back the existing instance.
+                var billingService = _serviceProvider.GetRequiredService<IMembershipBillingService>();
+                await billingService.RetireSupersededMembershipAsync(existingMembership);
                 return;
             }
 

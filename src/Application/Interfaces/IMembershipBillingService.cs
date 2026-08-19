@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using GymManagement.Domain.Entities;
 
 namespace GymManagement.Application.Interfaces
 {
@@ -27,5 +28,23 @@ namespace GymManagement.Application.Interfaces
         /// cancels the underlying recurring preapproval too so future charges stop.
         /// </summary>
         Task AdminCancelSubscriptionAsync(Guid membershipId);
+
+        /// <summary>
+        /// Retires an already-expired membership that is being replaced, stopping its recurring
+        /// charge first. An expired membership usually expired *because* its renewal charge kept
+        /// failing, so its preapproval is typically still live at Mercado Pago — marking the row
+        /// cancelled without cancelling that preapproval orphans a subscription that bills the
+        /// client forever with nothing left able to clean it up.
+        /// <para>
+        /// Unlike the cancel paths above this keeps the client's future class inscriptions: the
+        /// membership already lapsed on its own, and the caller is about to grant a replacement.
+        /// </para>
+        /// <para>
+        /// Throws <see cref="Exceptions.BillingUnavailableException"/> if Mercado Pago cannot
+        /// confirm the cancellation, leaving the membership untouched so the caller's whole
+        /// operation fails and can be retried cleanly.
+        /// </para>
+        /// </summary>
+        Task RetireSupersededMembershipAsync(Membership membership);
     }
 }
