@@ -1,13 +1,12 @@
 namespace GymManagement.Domain.Enums
 {
     /// <summary>
-    /// Whether an enrolled client actually turned up to the class.
-    /// Stored as an int, so the numeric values are part of the database contract —
-    /// reorder them and existing rows change meaning.
+    /// Whether an enrolled client turned up. Stored as an int, so these values are part of the
+    /// database contract — reordering them changes what existing rows mean.
     /// </summary>
     public enum AttendanceStatus
     {
-        /// <summary>No one has marked this client yet. Every inscription starts here.</summary>
+        /// <summary>Every inscription starts here.</summary>
         NotRecorded = 0,
 
         Present = 1,

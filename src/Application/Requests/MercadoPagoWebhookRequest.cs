@@ -1,8 +1,8 @@
 namespace GymManagement.Application.Requests
 {
     /// <summary>
-    /// Represents the Webhook notification payload sent by Mercado Pago.
-    /// Supports both standard payment and subscription_preapproval / subscription_authorized_payment events.
+    /// A Mercado Pago webhook payload — payment, subscription_preapproval and
+    /// subscription_authorized_payment events alike.
     /// </summary>
     public class MercadoPagoWebhookRequest
     {

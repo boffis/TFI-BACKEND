@@ -13,10 +13,7 @@ namespace GymManagement.Application.Interfaces
         void NullifyClientId(Guid inscriptionId);
         void RemoveById(Guid inscriptionId);
 
-        /// <summary>
-        /// Persists several inscriptions in one round trip. Used when a trainer saves a whole
-        /// attendance roster — marking them one at a time would be one SaveChanges per client.
-        /// </summary>
+        /// <summary>Persists several inscriptions in one round trip, for whole-roster attendance saves.</summary>
         void UpdateRange(IEnumerable<Inscription> inscriptions);
     }
 }

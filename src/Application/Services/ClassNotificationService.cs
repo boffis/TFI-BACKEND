@@ -59,9 +59,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Enrolled clients with a usable address. Inscriptions whose Client is null are
-        /// left-over records from a role change (see <c>NullifyClientId</c>) — there is nobody
-        /// to write to.
+        /// Enrolled clients with a usable address. A null Client is a leftover from a role change,
+        /// so there is nobody to write to.
         /// </summary>
         private List<Client> EnrolledClients(Guid gymClassId) =>
             [.. _inscriptionRepository.GetByClassId(gymClassId)
@@ -81,8 +80,8 @@ namespace GymManagement.Application.Services
             }
             catch (Exception ex)
             {
-                // Swallowed deliberately: see IClassNotificationService. The class change has
-                // already been applied and must not be undone because SMTP was unreachable.
+                // Swallowed deliberately: the class change is already applied and must not be
+                // undone because SMTP was unreachable.
                 _logger.LogError(ex,
                     "[Notifications] Could not send {Total} {Kind} emails", messages.Count, kind);
             }

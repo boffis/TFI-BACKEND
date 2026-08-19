@@ -1,8 +1,6 @@
 namespace GymManagement.Application.Responses
 {
-    /// <summary>
-    /// Lightweight trainer info suitable for public-facing endpoints.
-    /// </summary>
+    /// <summary>Lightweight trainer info for public-facing endpoints.</summary>
     public class TrainerSummaryResponse
     {
         public Guid TrainerId { get; set; }

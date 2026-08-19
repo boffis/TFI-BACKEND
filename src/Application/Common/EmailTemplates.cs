@@ -3,11 +3,8 @@ using System.Net;
 namespace GymManagement.Application.Common
 {
     /// <summary>
-    /// HTML bodies for the transactional emails the gym sends. Kept out of the services so the
-    /// business logic reads as business logic, and so the wording lives in one place.
-    /// <para>
-    /// Spanish, matching the sign-up and password-reset emails users already receive.
-    /// </para>
+    /// HTML bodies for the gym's transactional emails, in Spanish. Kept out of the services so the
+    /// wording lives in one place.
     /// </summary>
     public static class EmailTemplates
     {
@@ -18,10 +15,7 @@ namespace GymManagement.Application.Common
         public const string ClassCancelledSubject = "Clase cancelada - Gym Management";
         public const string ClassRescheduledSubject = "Cambio de horario en tu clase - Gym Management";
 
-        /// <summary>
-        /// Sent to every enrolled client when a class is cancelled, whether individually or as
-        /// part of cancelling a recurring schedule.
-        /// </summary>
+        /// <summary>Sent to enrolled clients when a class — or its whole schedule — is cancelled.</summary>
         public static string ClassCancelled(string clientName, string className, DateTime schedule) => $@"
             <div style='{ContainerStyle}'>
                 <h2 style='color: #2b2b2b;'>Tu clase fue cancelada</h2>
@@ -35,9 +29,7 @@ namespace GymManagement.Application.Common
                 <p style='color: #666; font-size: 13px;'>Disculpá las molestias.</p>
             </div>";
 
-        /// <summary>
-        /// Sent when a class the client is enrolled in moves to a different date or time.
-        /// </summary>
+        /// <summary>Sent when an enrolled class moves to a different date or time.</summary>
         public static string ClassRescheduled(
             string clientName, string className, DateTime oldSchedule, DateTime newSchedule) => $@"
             <div style='{ContainerStyle}'>
@@ -51,17 +43,11 @@ namespace GymManagement.Application.Common
                 <p>Tu inscripción sigue activa. Si el nuevo horario no te sirve, podés darte de baja desde tu cuenta.</p>
             </div>";
 
-        /// <summary>
-        /// Class times are stored as gym-local wall-clock values (see <see cref="GymTime"/>),
-        /// so they are formatted as-is without any conversion.
-        /// </summary>
+        /// <summary>Class times are gym-local wall clock (see <see cref="GymTime"/>), so no conversion.</summary>
         private static string FormatSchedule(DateTime schedule) =>
             schedule.ToString("dddd dd/MM/yyyy 'a las' HH:mm", new System.Globalization.CultureInfo("es-AR"));
 
-        /// <summary>
-        /// Names come from user input and land inside an HTML document, so they are encoded to
-        /// keep a name containing markup from breaking (or injecting into) the email body.
-        /// </summary>
+        /// <summary>Names are user input landing in HTML, so they are encoded.</summary>
         private static string Escape(string value) => WebUtility.HtmlEncode(value);
     }
 }

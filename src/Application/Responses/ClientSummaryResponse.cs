@@ -9,10 +9,7 @@ namespace GymManagement.Application.Responses
         public string Name { get; set; } = string.Empty;
         public string Email { get; set; } = string.Empty;
 
-        /// <summary>
-        /// Defaults to <see cref="AttendanceStatus.NotRecorded"/>, so callers that predate
-        /// attendance (the admin class detail page) keep working unchanged.
-        /// </summary>
+        /// <summary>Defaults to NotRecorded, so callers that predate attendance keep working.</summary>
         public AttendanceStatus AttendanceStatus { get; set; } = AttendanceStatus.NotRecorded;
 
         public DateTime? AttendanceRecordedAt { get; set; }

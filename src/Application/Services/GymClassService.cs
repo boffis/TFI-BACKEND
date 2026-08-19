@@ -70,11 +70,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Detail lookup for the client-facing class page. Unlike <see cref="GetAdminClassById"/>:
-        /// - classes that have already happened are treated as not found — clients shouldn't be able
-        ///   to open the detail page (or book) a class whose time has passed.
-        /// - other clients' names/emails are never included. The caller only needs a total count
-        ///   (to show spots left) and whether *they themselves* are inscribed.
+        /// Client-facing detail lookup. Unlike <see cref="GetAdminClassById"/>, past classes read as
+        /// not found and other clients' details are replaced by a count plus the caller's own status.
         /// </summary>
         public GymClassDetailResponse GetPublicClassById(Guid classId, Guid requestingUserId)
         {
@@ -201,12 +198,11 @@ namespace GymManagement.Application.Services
                 if (gymClass.TrainerId != requestingUserId)
                     throw new ForbiddenException("You can't modify a class that hasn't been assigned to you.");
 
-                // A Trainer cannot reassign a class to a different trainer
                 if (request.TrainerId != requestingUserId)
                     throw new ForbiddenException("You can't reassign a class to another trainer.");
             }
 
-            // If the trainer is being changed (Admin path), validate the new trainer
+            // Admin path: validate the incoming trainer.
             if (request.TrainerId != gymClass.TrainerId)
             {
                 var newTrainer = AssertIsActiveTrainer(request.TrainerId);
@@ -214,7 +210,7 @@ namespace GymManagement.Application.Services
                 gymClass.Trainer = newTrainer;
             }
 
-            // Captured before the mutation so the email can show what the time used to be.
+            // Captured before the mutation so the email can show the old time.
             var previousSchedule = gymClass.Schedule;
             var scheduleChanged = request.Schedule != previousSchedule;
 
@@ -225,8 +221,7 @@ namespace GymManagement.Application.Services
 
             _gymClassRepository.Update(gymClass);
 
-            // Only a moved class is worth an email — renaming it or changing its capacity
-            // doesn't affect whether a client can still attend.
+            // Only a moved class is worth an email; a rename doesn't affect attendance.
             if (scheduleChanged)
                 await _notifications.NotifyClassRescheduledAsync(gymClass, previousSchedule);
         }
@@ -236,8 +231,7 @@ namespace GymManagement.Application.Services
             var gymClass = _gymClassRepository.GetById(classId)
                 ?? throw new NotFoundException("Class not found.");
 
-            // Notify first: the roster has to be readable, and this never throws.
-            // Only future classes are worth an email — a past class's attendees already attended (or didn't).
+            // Notify first, while the roster is still readable. Past classes need no email.
             if (gymClass.Schedule >= GymTime.Now)
                 await _notifications.NotifyClassesCancelledAsync([gymClass]);
 
@@ -324,9 +318,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Records attendance for a whole class in one go. Only the trainer who owns the class,
-        /// or an Admin, may do this, and only once the class has actually started.
-        /// Returns the refreshed roster so the caller doesn't need a second request.
+        /// Records attendance for a whole class. Owning trainer or Admin only, and only once the
+        /// class has started. Returns the refreshed roster.
         /// </summary>
         public List<ClientSummaryResponse> RecordAttendance(
             Guid classId, AttendanceRequest request, Guid requestingUserId, string userRole)
@@ -337,8 +330,6 @@ namespace GymManagement.Application.Services
             if (userRole == "Trainer" && gymClass.TrainerId != requestingUserId)
                 throw new ForbiddenException("You can't record attendance for a class that isn't yours.");
 
-            // Marking attendance before the class has started would let a trainer fill in a
-            // register for sessions that haven't happened yet.
             if (gymClass.Schedule > GymTime.Now)
                 throw new ConflictException("This class hasn't started yet, so attendance can't be recorded.");
 
@@ -351,8 +342,7 @@ namespace GymManagement.Application.Services
             if (duplicateClientIds.Count > 0)
                 throw new ValidationException("The same client appears more than once in the attendance list.");
 
-            // C# enums accept any underlying int, so an out-of-range status would otherwise be
-            // stored verbatim and read back as a value nothing knows how to render.
+            // C# enums accept any int, so an out-of-range status would be stored and read back raw.
             if (request.Entries.Any(e => !Enum.IsDefined(e.Status)))
                 throw new ValidationException("The attendance list contains an unrecognised status value.");
 
@@ -361,8 +351,7 @@ namespace GymManagement.Application.Services
                 .Where(i => i.ClientId != null)
                 .ToDictionary(i => i.ClientId!.Value);
 
-            // Reject unknown clients outright rather than skipping them: silently ignoring an
-            // entry would hide a frontend bug behind an apparently successful save.
+            // Reject rather than skip: silently ignoring an entry hides frontend bugs.
             var notEnrolled = request.Entries
                 .Where(e => !inscriptionByClientId.ContainsKey(e.ClientId))
                 .ToList();
@@ -377,7 +366,6 @@ namespace GymManagement.Application.Services
                 if (inscription.AttendanceStatus == entry.Status) continue;
 
                 inscription.AttendanceStatus = entry.Status;
-                // Clearing a mark clears its timestamp too, so the two never disagree.
                 inscription.AttendanceRecordedAt = entry.Status == AttendanceStatus.NotRecorded
                     ? null
                     : DateTime.UtcNow;
@@ -390,14 +378,9 @@ namespace GymManagement.Application.Services
             return [.. inscriptions.Where(i => i.Client != null).Select(ToClientSummary)];
         }
 
-        // -----------------------------------------------------------------------
-        // Helpers
-        // -----------------------------------------------------------------------
-
         /// <summary>
-        /// Maps an inscription whose Client is loaded. Callers must filter out inscriptions with a
-        /// null Client first — those are enrolments left behind by a role change (see
-        /// <c>NullifyClientId</c>), which exist only to preserve the attendance record.
+        /// Maps an inscription whose Client is loaded. Callers must first filter out null-Client
+        /// rows — enrolments left behind by a role change, kept only for the attendance record.
         /// </summary>
         private static ClientSummaryResponse ToClientSummary(Inscription inscription) => new()
         {
@@ -408,10 +391,7 @@ namespace GymManagement.Application.Services
             AttendanceRecordedAt = inscription.AttendanceRecordedAt
         };
 
-        /// <summary>
-        /// Asserts that <paramref name="trainerId"/> belongs to an active, non-deleted Trainer.
-        /// Throws <see cref="NotFoundException"/> otherwise.
-        /// </summary>
+        /// <summary>Asserts <paramref name="trainerId"/> is an active, non-deleted Trainer.</summary>
         private Trainer AssertIsActiveTrainer(Guid trainerId)
         {
             var trainer = _trainerRepository.GetById(trainerId)

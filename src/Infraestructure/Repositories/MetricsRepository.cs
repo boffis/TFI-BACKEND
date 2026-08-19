@@ -57,8 +57,7 @@ namespace GymManagement.Infrastructure.Repositories
                 .AsNoTracking()
                 .CountAsync(c => !c.IsUserDeleted);
 
-            // Counted per user, not per membership row: a client holding two non-cancelled
-            // memberships is still one active member.
+            // Per user, not per row: two non-cancelled memberships is still one active member.
             var withActive = await _context.Memberships
                 .AsNoTracking()
                 .Where(m => !m.IsCancelled && m.ExpirationDate > utcNow)
@@ -140,8 +139,7 @@ namespace GymManagement.Infrastructure.Repositories
         public async Task<List<PopularClassResponse>> GetPopularClassesAsync(
             DateTime windowStart, DateTime now, int take)
         {
-            // Grouped by name rather than id: an admin wants "how is Spinning doing", not how one
-            // Tuesday session did. Recurring sessions all share the schedule's class name.
+            // Grouped by name, not id: admins want "how is Spinning doing", not one Tuesday session.
             var rows = await _context.GymClasses
                 .AsNoTracking()
                 .Where(gc => !gc.IsClassDeleted && gc.Schedule <= now && gc.Schedule >= windowStart)
@@ -208,10 +206,7 @@ namespace GymManagement.Infrastructure.Repositories
                 .OrderByDescending(t => t.InscriptionsInWindow)
                 .ToListAsync();
 
-        /// <summary>
-        /// Payment states are written inconsistently upstream ("Pending" locally, "pending" and raw
-        /// Mercado Pago values from the webhook), so matching is done in lower case on both sides.
-        /// </summary>
+        /// <summary>Payment states are cased inconsistently upstream, so both sides match lower case.</summary>
         private static List<string> Normalise(IReadOnlyCollection<string> states)
             => [.. states.Select(s => s.ToLowerInvariant())];
 

@@ -51,17 +51,11 @@ namespace GymManagement.Infrastructure.Payments
             MercadoPagoConfig.AccessToken = _settings.AccessToken?.Trim();
         }
 
-        // ─── Signature Validation ───────────────────────────────────────────────────
-
-        /// <summary>
-        /// Validates the x-signature header sent by Mercado Pago using HMAC-SHA256 and WebhookSecret.
-        /// Returns true if valid, or if WebhookSecret is empty (local dev bypass).
-        /// </summary>
+        /// <summary>Validates Mercado Pago's x-signature header (HMAC-SHA256). Bypassed when no secret is configured.</summary>
         public bool ValidateWebhookSignature(string? xSignature, string? requestId, string? dataId)
         {
             if (string.IsNullOrWhiteSpace(_settings.WebhookSecret))
             {
-                // Secret not configured (e.g. local development), bypass check
                 return true;
             }
 
@@ -102,8 +96,7 @@ namespace GymManagement.Infrastructure.Payments
             }
         }
 
-        // ─── Legacy redirect-based flow (kept for reference) ────────────────────────
-
+        // Legacy redirect-based flow, kept for reference.
         public async Task<string> CreatePreference(Guid membershipId)
         {
             var membership = await _context.Memberships
@@ -186,12 +179,9 @@ namespace GymManagement.Infrastructure.Payments
             }
         }
 
-        // ─── Card Payment Brick / Subscriptions flow ─────────────────────────────────
-
         /// <summary>
-        /// Processes the initial subscription payment using the card token from the
-        /// Card Payment Brick, activates the user's membership, and creates a recurring
-        /// Preapproval in Mercado Pago for future automatic charges.
+        /// Charges the Card Payment Brick token, activates the membership and creates the
+        /// recurring Preapproval for future automatic charges.
         /// </summary>
         public async Task<object> CreateSubscriptionAsync(SubscriptionRequest request, Guid userId)
         {
@@ -209,26 +199,18 @@ namespace GymManagement.Infrastructure.Payments
                 .FirstOrDefaultAsync(p => p.MembershipPlanId == request.MembershipPlanId)
                 ?? throw new NotFoundException($"Plan {request.MembershipPlanId} not found.");
 
-            // Checked before any preapproval exists: a client sitting on a stale pricing page must
-            // not be able to start a subscription to a plan that is no longer offered.
+            // Before any preapproval exists: a stale pricing page must not subscribe to a retired plan.
             if (plan.IsDeleted)
                 throw new ConflictException("This membership plan is no longer available.");
 
-            // Read the client's current membership before the conflict check runs: the check
-            // cancels an expired one, which would hide it from the Step 2 lookup below and leave
-            // its Mercado Pago subscription billing the card forever.
+            // Read before the conflict check: it cancels expired memberships, hiding them from Step 2.
             var previousMembership = await _context.Memberships
                 .FirstOrDefaultAsync(m => m.UserId == userId && !m.IsCancelled);
 
-            // One membership per client, refused here rather than after Step 1: throwing once the
-            // preapproval exists would leave a live subscription charging a client we just said
-            // "no" to. A still-valid membership throws ConflictException (HTTP 409) and the client
-            // is told to cancel it first; an expired one is cancelled to make room.
+            // Before Step 1: throwing later would leave a live subscription charging a rejected client.
             await _membershipService.EnsureNoConflictingMembershipAsync(userId, selfService: true);
 
-            // ── Step 1: Create Preapproval (subscription) in Mercado Pago via raw HTTP ──
-            // The SDK v3.3.0 is missing card_token_id on PreapprovalCreateRequest,
-            // so we call the API directly with HttpClient to include all required fields.
+            // Step 1: create the preapproval over raw HTTP — SDK v3.3.0 lacks card_token_id.
             var (frequencyType, frequencyValue) = plan.DurationInDays switch
             {
                 7 => ("days", 7),
@@ -243,8 +225,7 @@ namespace GymManagement.Infrastructure.Payments
             var preapprovalBody = new
             {
                 back_url = clientAppUrl,
-                // notification_url is NOT supported for preapprovals — configure it
-                // in the Mercado Pago Developer Dashboard instead.
+                // notification_url is unsupported for preapprovals; set it in the MP dashboard.
                 reason = $"Membresía {plan.Type} - Gym Management",
                 external_reference = userId.ToString(),
                 payer_email = request.Payer.Email,
@@ -254,8 +235,7 @@ namespace GymManagement.Infrastructure.Payments
                 {
                     frequency = frequencyValue,
                     frequency_type = frequencyType,
-                    // No start_date → MP charges the first installment immediately
-                    // (within ~1 hour of subscription creation).
+                    // No start_date → MP charges the first installment within ~1 hour.
                     end_date = DateTime.UtcNow.AddYears(3).ToString("yyyy-MM-ddTHH:mm:ss.fffzzz"),
                     transaction_amount = plan.Price,
                     currency_id = "ARS"
@@ -295,10 +275,7 @@ namespace GymManagement.Infrastructure.Payments
                 throw new ValidationException("We couldn't set up your subscription. Please try again or contact support.");
             }
 
-            // ── Step 2: Cancel the previous preapproval in MP to avoid duplicates ────
-            // Only an expired membership can still be here — a valid one threw above — but its
-            // subscription may well be alive at Mercado Pago (that is how a membership expires
-            // without being cancelled: the renewal charge stopped going through). Cancel it, or
+            // Step 2: an expired membership's subscription may still be live at MP; cancel it or
             // the card gets charged for both the old plan and the new one.
             if (previousMembership != null && !string.IsNullOrEmpty(previousMembership.MpPreapprovalId))
             {
@@ -316,12 +293,8 @@ namespace GymManagement.Infrastructure.Payments
                 catch { /* best-effort: if old preapproval is already gone, ignore */ }
             }
 
-            // ── Step 3: Activate the membership locally ────────────────────────────
-            // MP automatically charges the card within 1 hour of subscription creation.
-            // We record the membership and a pending payment locally.
-            // Always a new row: the conflict check leaves no non-cancelled membership behind, so
-            // there is nothing to reuse, and each subscription keeps its own history — same as the
-            // admin paths in MembershipService.
+            // Step 3: record the membership and a pending payment. Always a new row — the conflict
+            // check leaves nothing to reuse, and each subscription keeps its own history.
             var membership = new Membership
             {
                 MembershipId = Guid.NewGuid(),
@@ -331,8 +304,7 @@ namespace GymManagement.Infrastructure.Payments
                 MembershipPlan = null!,
                 IsCancelled = false,
                 MpPreapprovalId = preapprovalId,
-                // ExpirationDate will be updated by webhook when MP confirms the payment.
-                // Set a provisional expiration based on plan duration.
+                // Provisional; the webhook resets it when MP confirms the payment.
                 ExpirationDate = DateTime.UtcNow.AddDays(plan.DurationInDays)
             };
 
@@ -355,9 +327,7 @@ namespace GymManagement.Infrastructure.Payments
             _context.Payments.Add(localPayment);
             await _context.SaveChangesAsync();
 
-            // The payment is returned in the same shape login serves it (UserService:120), so the
-            // client can append it to its cached user without a round trip and end up with exactly
-            // what it would get after signing out and back in.
+            // Same payment shape login serves, so the client can append it to its cached user.
             return new
             {
                 preapprovalId = preapprovalId,
@@ -377,13 +347,7 @@ namespace GymManagement.Infrastructure.Payments
             };
         }
 
-        /// <summary>
-        /// Cancels a recurring subscription both in Mercado Pago and locally.
-        /// Only the owner of the membership may cancel it (userId is validated here).
-        /// Uses the named "MercadoPago" HttpClient which has a Polly retry policy
-        /// (up to 5 retries with exponential backoff on transient HTTP errors).
-        /// IsCancelled is only set to true once Mercado Pago confirms the cancellation.
-        /// </summary>
+        /// <summary>Owner-only cancellation, in Mercado Pago and locally.</summary>
         public async Task CancelSubscriptionAsync(Guid membershipId, Guid userId)
         {
             var membership = await _context.Memberships
@@ -396,11 +360,7 @@ namespace GymManagement.Infrastructure.Payments
             await CancelSubscriptionInternalAsync(membership);
         }
 
-        /// <summary>
-        /// Admin-only path: revokes any client's membership regardless of ownership. Shares the
-        /// same Mercado Pago preapproval cancellation as the client self-service flow above, so a
-        /// revoked MP-billed membership actually stops billing instead of just flipping a flag here.
-        /// </summary>
+        /// <summary>Admin path: same cancellation as above, without the ownership check.</summary>
         public async Task AdminCancelSubscriptionAsync(Guid membershipId)
         {
             var membership = await _context.Memberships
@@ -415,10 +375,8 @@ namespace GymManagement.Infrastructure.Payments
             if (membership.IsCancelled)
                 throw new ConflictException("This membership is already cancelled.");
 
-            // AutoRenew == false means the preapproval was already cancelled at Mercado Pago when the
-            // plan was discontinued. Asking MP to cancel it a second time can come back as an error
-            // that isn't a 404, which would throw here and leave the client unable to cancel a
-            // membership that has nothing left to bill — so skip straight to the local cancellation.
+            // AutoRenew == false → already cancelled at MP (discontinued plan). Cancelling twice can
+            // return a non-404 error and block the client, so go straight to the local cancellation.
             if (!string.IsNullOrEmpty(membership.MpPreapprovalId) && membership.AutoRenew)
             {
                 var failure = await TryCancelPreapprovalAsync(membership.MpPreapprovalId);
@@ -428,26 +386,22 @@ namespace GymManagement.Infrastructure.Payments
                         "[MercadoPago] Failed to cancel preapproval {PreapprovalId} — {Error}",
                         membership.MpPreapprovalId, failure);
 
-                    // A plain Exception here would fall through GlobalExceptionHandler's allow-list and
-                    // reach the client as the generic "something went wrong", hiding the one detail
-                    // that matters: it's Mercado Pago that's failing, and retrying is worth doing.
+                    // A plain Exception would reach the client as a generic error, hiding that
+                    // Mercado Pago is the one failing and that retrying is worth doing.
                     throw new BillingUnavailableException("Mercado Pago couldn't cancel the subscription.");
                 }
             }
 
-            // Only mark as cancelled locally after MP confirmed the cancellation above.
+            // Only after MP confirmed above.
             membership.IsCancelled = true;
             await _context.SaveChangesAsync();
             await RemoveFutureInscriptionsAsync(membership.UserId);
         }
 
         /// <summary>
-        /// Cancels the preapproval so no further charge is ever attempted, without touching the
-        /// membership row. This is the "discontinue" half of a cancellation: unlike
-        /// CancelSubscriptionInternalAsync it leaves IsCancelled false and keeps the client's
-        /// future class inscriptions, so access simply runs out at ExpirationDate.
-        /// Best-effort: logs and returns false instead of throwing, so one stale preapproval
-        /// doesn't abort discontinuing the plan for everyone else on it.
+        /// Stops future charges without touching the membership: IsCancelled stays false and access
+        /// runs out at ExpirationDate. Best-effort — returns false instead of throwing, so one stale
+        /// preapproval doesn't abort discontinuing the plan for everyone else.
         /// </summary>
         public async Task<bool> StopAutoRenewalAsync(string preapprovalId)
         {
@@ -461,20 +415,10 @@ namespace GymManagement.Infrastructure.Payments
         }
 
         /// <summary>
-        /// The one place that asks Mercado Pago to cancel a preapproval. Returns null on success, or a
-        /// short description of the failure — callers decide whether that is fatal, since the three
-        /// cancellation paths disagree: the client/admin cancel throws, discontinuing a plan carries on
-        /// without the client, and retiring a superseded membership aborts its caller entirely.
-        /// <para>
-        /// Uses the named "MercadoPago" HttpClient, which carries the Polly retry policy (up to 5
-        /// retries with exponential backoff on transient HTTP errors). We call the REST API directly
-        /// rather than through the SDK because the SDK does not run through that pipeline.
-        /// </para>
-        /// <para>
-        /// A preapproval Mercado Pago no longer has counts as success. MP reports that as a 404, or
-        /// sometimes another status code with "resource not found" in the body; either way there is
-        /// nothing left that could charge anyone, which is exactly the outcome being asked for.
-        /// </para>
+        /// The one place that cancels a preapproval at Mercado Pago. Returns null on success or a
+        /// description of the failure — callers decide whether it is fatal. Uses the named
+        /// "MercadoPago" client (Polly retries) rather than the SDK, which skips that pipeline.
+        /// A preapproval MP no longer has counts as success.
         /// </summary>
         private async Task<string?> TryCancelPreapprovalAsync(string preapprovalId)
         {
@@ -509,19 +453,14 @@ namespace GymManagement.Infrastructure.Payments
         }
 
         /// <summary>
-        /// Retires an expired membership that is being replaced, stopping its recurring charge first.
-        /// See <see cref="IMembershipBillingService.RetireSupersededMembershipAsync"/> for why this
-        /// exists: an expired membership's preapproval is usually still live at Mercado Pago, and
-        /// flipping IsCancelled without cancelling it orphans a subscription that bills forever.
+        /// Retires an expired membership being replaced, stopping its recurring charge first — its
+        /// preapproval is usually still live at MP and would otherwise bill forever.
         /// </summary>
         public async Task RetireSupersededMembershipAsync(Membership membership)
         {
             if (membership.IsCancelled) return;
 
-            // Nothing to stop at Mercado Pago: either the membership was never billed through a
-            // preapproval (cash), or AutoRenew is already false because the preapproval was cancelled
-            // when an admin discontinued the plan. Same guard, same reasoning, as
-            // CancelSubscriptionInternalAsync.
+            // Nothing to stop at MP: cash membership, or the preapproval is already cancelled.
             if (string.IsNullOrWhiteSpace(membership.MpPreapprovalId) || !membership.AutoRenew)
             {
                 membership.IsCancelled = true;
@@ -529,12 +468,8 @@ namespace GymManagement.Infrastructure.Payments
                 return;
             }
 
-            // Persisted *before* calling Mercado Pago, not after. Cancelling the preapproval makes MP
-            // send back a "cancelled" notification, and the webhook handler reads AutoRenew to tell our
-            // own cancellation apart from a client walking away. If the flag were still true when that
-            // notification landed, the handler would strip the client's upcoming class inscriptions —
-            // and the caller is about to grant them a replacement membership. Same ordering, and the
-            // same reason, as StopRenewalsForSubscribersAsync.
+            // Persisted *before* calling MP: the webhook reads AutoRenew to tell our own cancellation
+            // apart from a client walking away, and would otherwise strip future inscriptions.
             membership.AutoRenew = false;
             await _context.SaveChangesAsync();
 
@@ -542,9 +477,7 @@ namespace GymManagement.Infrastructure.Payments
 
             if (failure != null)
             {
-                // Roll the flag back, or a retry would hit the "nothing to stop" guard above and
-                // orphan the preapproval anyway — reintroducing this exact bug through the error path.
-                // IsCancelled was never touched, so the caller's next attempt re-detects and retries.
+                // Roll back, or a retry hits the "nothing to stop" guard and orphans the preapproval.
                 membership.AutoRenew = true;
                 await _context.SaveChangesAsync();
 
@@ -556,8 +489,7 @@ namespace GymManagement.Infrastructure.Payments
                     "Mercado Pago couldn't cancel the previous subscription. Please try again.");
             }
 
-            // Only after MP confirmed. Future inscriptions are deliberately left alone: the membership
-            // lapsed on its own and a replacement is about to be created.
+            // Future inscriptions are left alone: a replacement membership is about to be created.
             membership.IsCancelled = true;
             await _context.SaveChangesAsync();
 
@@ -567,10 +499,8 @@ namespace GymManagement.Infrastructure.Payments
         }
 
         /// <summary>
-        /// Updates the recurring charge amount of an existing preapproval so the next
-        /// billing cycle charges <paramref name="newAmount"/> instead of the old price.
-        /// Best-effort: logs and returns false instead of throwing, so a plan-wide price
-        /// update isn't aborted by one subscriber's preapproval being stale/gone on MP's side.
+        /// Repoints an existing preapproval at <paramref name="newAmount"/> for the next billing
+        /// cycle. Best-effort, so one stale preapproval doesn't abort a plan-wide price update.
         /// </summary>
         public async Task<bool> UpdatePreapprovalAmountAsync(string preapprovalId, decimal newAmount)
         {
@@ -611,10 +541,8 @@ namespace GymManagement.Infrastructure.Payments
         }
 
         /// <summary>
-        /// Removes a client's inscriptions to gym classes that haven't happened yet.
-        /// Called whenever a membership becomes cancelled (self-service cancel, declined
-        /// payment, or a Mercado Pago preapproval cancellation) so a client without an
-        /// active membership doesn't stay booked into future classes.
+        /// Drops the client's not-yet-happened class bookings. Called whenever a membership becomes
+        /// cancelled, so a client without access doesn't stay booked.
         /// </summary>
         private async Task RemoveFutureInscriptionsAsync(Guid userId)
         {
@@ -633,14 +561,9 @@ namespace GymManagement.Infrastructure.Payments
                 futureInscriptions.Count, userId);
         }
 
-        // ─── Webhook Notification Processing ─────────────────────────────────────────
-
         /// <summary>
-        /// Handles asynchronous Webhook notifications sent by Mercado Pago.
-        /// Follows official MP Webhook documentation:
-        /// 1. Query resource details via SDK using resourceId.
-        /// 2. If approved payment -> record payment and extend membership expiration.
-        /// 3. If preapproval status update -> sync local cancellation state.
+        /// Handles Mercado Pago webhooks: approved payments extend the membership, preapproval
+        /// updates sync the local cancellation state.
         /// </summary>
         public async Task ProcessWebhookNotificationAsync(string? resourceType, string resourceId)
         {
@@ -648,10 +571,8 @@ namespace GymManagement.Infrastructure.Payments
 
             resourceType = resourceType?.ToLowerInvariant();
 
-            // This method runs fire-and-forget from a background Task.Run (the controller
-            // already returned 200 to Mercado Pago by the time this executes), so an
-            // unhandled exception here would otherwise vanish silently — no retry from MP,
-            // no error anywhere. Log it so failures are actually visible in App Service logs.
+            // Fire-and-forget from a background Task.Run — the controller already returned 200, so an
+            // unhandled exception would vanish silently with no retry from MP.
             try
             {
                 await ProcessWebhookNotificationCoreAsync(resourceType, resourceId);
@@ -674,24 +595,21 @@ namespace GymManagement.Infrastructure.Payments
             {
                 if (!long.TryParse(resourceId, out long mpPaymentId)) return;
 
-                // Idempotency check: skip only if this payment was already fully processed.
-                // If it exists but is still "pending", fall through so its status gets updated.
+                // Idempotency: skip only if fully processed; a "pending" row falls through to update.
                 var existingPayment = await _context.Payments
                     .FirstOrDefaultAsync(p => p.MpPaymentId == resourceId);
 
                 if (existingPayment != null && existingPayment.PaymentState == "approved")
                 {
-                    // Already processed — nothing to do.
                     return;
                 }
 
-                // Fetch real-time payment status directly from Mercado Pago SDK
                 var paymentClient = new PaymentClient();
                 var mpPayment = await paymentClient.GetAsync(mpPaymentId);
 
                 if (mpPayment == null) return;
 
-                // Skip $0 card-validation charges — they are not real payments.
+                // $0 card-validation charges are not real payments.
                 if (mpPayment.OperationType == "card_validation"
                     || (mpPayment.TransactionAmount.HasValue && mpPayment.TransactionAmount.Value == 0))
                 {
@@ -700,9 +618,6 @@ namespace GymManagement.Infrastructure.Payments
 
                 if (mpPayment.Status == "approved")
                 {
-                    // Try to find the membership:
-                    // 1) Via ExternalReference on the payment (userId)
-                    // 2) Fallback: via the preapproval ID stored on the membership
                     Membership? membership = null;
 
                     if (Guid.TryParse(mpPayment.ExternalReference, out Guid userId))
@@ -717,9 +632,7 @@ namespace GymManagement.Infrastructure.Payments
                                 resourceId, membership.MembershipId);
                     }
 
-                    // Fallback: recurring/auto-charged subscription payments often don't carry
-                    // ExternalReference. Mercado Pago attaches the preapproval (subscription) id
-                    // to the payment itself, so match it against the membership's MpPreapprovalId.
+                    // Auto-charged renewals often lack ExternalReference but carry the subscription id.
                     if (membership == null)
                     {
                         var subscriptionId = mpPayment.PointOfInteraction?.TransactionData?.SubscriptionId;
@@ -736,10 +649,9 @@ namespace GymManagement.Infrastructure.Payments
                         }
                     }
 
-                    // Last-resort fallback: look up by payer email → user → membership.
+                    // Last resort: payer email → local user → active membership.
                     if (membership == null)
                     {
-                        // Try to find by payer email → local user → active membership
                         var payerEmail = mpPayment.Payer?.Email;
                         if (!string.IsNullOrWhiteSpace(payerEmail))
                         {
@@ -768,50 +680,37 @@ namespace GymManagement.Infrastructure.Payments
 
                     if (membership != null && membership.MembershipPlan != null)
                     {
-                        // An approved charge against a cancelled membership means its preapproval was
-                        // never cancelled at Mercado Pago and is still billing a client who has no
-                        // access — an orphaned subscription. The ExternalReference lookup above filters
-                        // cancelled memberships out, but the subscription_id fallback deliberately does
-                        // not, so those charges surface here instead of silently missing.
+                        // A charge against a cancelled membership means an orphaned subscription is
+                        // still billing a client with no access. The subscription_id fallback above
+                        // deliberately doesn't filter those out, so they surface here.
                         if (membership.IsCancelled)
                         {
                             _logger.LogError(
                                 "[MercadoPago Webhook] Approved payment {PaymentId} (amount {Amount}) charged CANCELLED membership {MembershipId} — preapproval {PreapprovalId} was never cancelled and is still billing the client",
                                 resourceId, mpPayment.TransactionAmount, membership.MembershipId, membership.MpPreapprovalId);
 
-                            // Best-effort self-heal: stop the recurring charge now, so the client isn't
-                            // billed again next cycle while someone works out the refund. Keyed on
-                            // IsCancelled rather than AutoRenew on purpose — a discontinued plan leaves
-                            // AutoRenew false with the membership legitimately alive to its expiration
-                            // date, and cancelling there would be cancelling what is already cancelled.
+                            // Self-heal so the client isn't billed again next cycle. No ExpirationDate
+                            // extension: this charge buys nothing. The payment is still recorded below,
+                            // since the money genuinely moved.
                             if (!string.IsNullOrWhiteSpace(membership.MpPreapprovalId))
                                 await StopAutoRenewalAsync(membership.MpPreapprovalId);
-
-                            // Deliberately no ExpirationDate extension: this charge buys nothing, and
-                            // moving the date would silently un-expire a membership whose IsCancelled
-                            // flag keeps access switched off anyway. The payment is still recorded
-                            // below — the money genuinely moved and has to be visible.
                         }
                         else
                         {
-                            // A charge that lands after auto-renewal was stopped (an admin discontinued
-                            // the plan) is an in-flight straggler, not an orphan: the preapproval is
-                            // already cancelled, and the client paid for this period, so it is honoured.
+                            // A charge landing after auto-renewal stopped is an in-flight straggler, not
+                            // an orphan — the client paid for this period, so honour it.
                             if (!membership.AutoRenew)
                                 _logger.LogWarning(
                                     "[MercadoPago Webhook] Approved payment {PaymentId} landed on membership {MembershipId} after auto-renewal was stopped — honouring it as an in-flight charge",
                                     resourceId, membership.MembershipId);
 
-                            // Extend membership expiration
                             membership.ExpirationDate = DateTime.UtcNow > membership.ExpirationDate
                                 ? DateTime.UtcNow.AddDays(membership.MembershipPlan.DurationInDays)
                                 : membership.ExpirationDate.AddDays(membership.MembershipPlan.DurationInDays);
                         }
 
-                        // Try to find the existing pending payment for this membership
-                        // (created locally when the subscription was initiated) and update it.
-                        // Also fall back to existingPayment (matched by MpPaymentId) if no
-                        // membership-scoped pending record is found.
+                        // Update the pending row created when the subscription started, falling back
+                        // to the MpPaymentId match.
                         var pendingPayment = await _context.Payments
                             .FirstOrDefaultAsync(p =>
                                 p.MembershipId == membership.MembershipId &&
@@ -828,7 +727,6 @@ namespace GymManagement.Infrastructure.Payments
                         }
                         else
                         {
-                            // No existing record found at all: insert a new payment
                             var payment = new Payment
                             {
                                 PaymentId = Guid.NewGuid(),
@@ -850,12 +748,9 @@ namespace GymManagement.Infrastructure.Payments
                 }
                 else if (mpPayment.Status == "rejected" || mpPayment.Status == "cancelled")
                 {
-                    // The charge was denied. CreateSubscriptionAsync grants membership access
-                    // optimistically as soon as the preapproval is authorized, before Mercado Pago
-                    // actually attempts the real charge — if that charge is then denied, the
-                    // membership must not be left silently active as if it had been paid.
-                    // Only ExternalReference / subscription id are used here (not the payer-email
-                    // fallback): revoking access is destructive, so we only act on precise matches.
+                    // CreateSubscriptionAsync grants access optimistically once the preapproval is
+                    // authorized, so a denied charge must not leave the membership active. No
+                    // payer-email fallback here: revoking access is destructive, so exact matches only.
                     Membership? membership = null;
 
                     if (Guid.TryParse(mpPayment.ExternalReference, out Guid userId))
@@ -876,10 +771,8 @@ namespace GymManagement.Infrastructure.Payments
 
                     if (membership != null)
                     {
-                        // Only revoke if this was the membership's initiating charge (still
-                        // "pending" locally) — it was never actually paid for. A denied renewal
-                        // charge on an already-paid membership is a separate concern and is left
-                        // alone here.
+                        // Only the initiating charge (still "pending") revokes access; a denied renewal
+                        // on an already-paid membership is left alone.
                         var pendingPayment = await _context.Payments
                             .FirstOrDefaultAsync(p =>
                                 p.MembershipId == membership.MembershipId &&
@@ -913,19 +806,11 @@ namespace GymManagement.Infrastructure.Payments
 
                 if (membership != null)
                 {
-                    // Only ever revoke here, never re-grant: an "authorized" preapproval just means
-                    // the recurring billing agreement is still valid, NOT that the most recent charge
-                    // succeeded — Mercado Pago keeps retrying a preapproval even after a declined
-                    // charge, so treating "authorized" as "un-cancel" would undo the revocation from
-                    // a rejected-payment webhook (see the payment.status == rejected/cancelled branch
-                    // above) whenever the two notifications race. There is no reactivate/resume
-                    // feature in this app that depends on the opposite transition.
-                    // AutoRenew == false means we cancelled this preapproval ourselves to stop the
-                    // recurring charge while deliberately keeping the membership alive to its
-                    // expiration date (an admin discontinued the plan). The "cancelled" notification
-                    // that arrives moments later is the echo of our own request, not the client
-                    // walking away — acting on it would revoke access we just promised to keep and
-                    // wipe their future class inscriptions.
+                    // Revoke only, never re-grant: "authorized" means the agreement is valid, not that
+                    // the last charge succeeded, so treating it as un-cancel would undo the revocation
+                    // from a rejected-payment webhook when the two notifications race.
+                    // AutoRenew == false means we cancelled this preapproval ourselves (discontinued
+                    // plan) — the "cancelled" notification is our own echo, not the client leaving.
                     bool justCancelled = !membership.IsCancelled && membership.AutoRenew &&
                         (preapproval.Status == "cancelled" || preapproval.Status == "paused");
 

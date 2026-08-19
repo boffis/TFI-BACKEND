@@ -5,10 +5,7 @@ namespace GymManagement.Application.Common
 {
     public static class TextFormatter
     {
-        /// <summary>
-        /// Normalizes a person's name to title case (e.g. "juan pérez" -> "Juan Pérez"),
-        /// capitalizing after spaces, hyphens and apostrophes (e.g. "mary-jane o'brien" -> "Mary-Jane O'Brien").
-        /// </summary>
+        /// <summary>Title-cases a name, capitalizing after spaces, hyphens and apostrophes.</summary>
         public static string ToTitleCase(string? name)
         {
             if (string.IsNullOrWhiteSpace(name)) return name ?? string.Empty;

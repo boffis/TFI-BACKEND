@@ -2,9 +2,7 @@ namespace GymManagement.Application.Requests
 {
     public class SubscriptionRequest
     {
-        /// <summary>
-        /// The card token obtained from the Mercado Pago Card Payment Brick on the frontend.
-        /// </summary>
+        /// <summary>Card token from the frontend's Mercado Pago Card Payment Brick.</summary>
         public string Token { get; set; } = string.Empty;
 
         public string IssuerId { get; set; } = string.Empty;

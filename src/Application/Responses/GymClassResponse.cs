@@ -6,13 +6,9 @@ namespace GymManagement.Application.Responses
     public class GymClassResponse
     {
         /// <summary>
-        /// Whether the class has already begun, in the gym's own time zone.
-        /// <para>
-        /// Computed here rather than by the client: <see cref="Schedule"/> is a wall-clock value with
-        /// no time zone, so a browser comparing it against its own clock only gets the right answer
-        /// when the viewer happens to be in the same zone as the gym. Deriving it on the DTO also
-        /// means every place that builds this response gets it right without having to remember.
-        /// </para>
+        /// Whether the class has begun, in the gym's time zone. Computed here because
+        /// <see cref="Schedule"/> is zone-less, so a browser comparing it to its own clock is only
+        /// right when the viewer sits in the gym's zone.
         /// </summary>
         public bool HasStarted => Schedule <= GymTime.Now;
 
@@ -29,9 +25,8 @@ namespace GymManagement.Application.Responses
         public DateTime Schedule { get; set; }
 
         /// <summary>
-        /// The recurring schedule this session was generated from, or <c>null</c> when the class is a
-        /// one-off ("special") class created on its own. Clients use the null-ness to tell the two
-        /// apart, so every mapping must set it from the entity rather than leave it to default.
+        /// The recurring schedule this session came from, or null for a one-off "special" class.
+        /// Clients tell the two apart by the null-ness, so every mapping must set it.
         /// </summary>
         public Guid? GymClassScheduleId { get; set; }
 

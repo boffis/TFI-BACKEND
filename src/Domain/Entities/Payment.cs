@@ -20,9 +20,7 @@ namespace GymManagement.Domain.Entities
 
         public string PaymentState { get; set; } = string.Empty;
 
-        /// <summary>
-        /// Mercado Pago Payment ID for tracking and idempotency.
-        /// </summary>
+        /// <summary>Mercado Pago payment id, for tracking and idempotency.</summary>
         public string? MpPaymentId { get; set; }
     }
 }

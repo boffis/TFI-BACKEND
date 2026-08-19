@@ -14,16 +14,10 @@ namespace GymManagement.Domain.Entities
 
         public required GymClass GymClass { get; set; }
 
-        /// <summary>
-        /// Attendance is a property of the enrolment itself (one row per client per class),
-        /// so it lives here rather than in a separate table.
-        /// </summary>
+        /// <summary>Attendance belongs to the enrolment itself, so no separate table.</summary>
         public AttendanceStatus AttendanceStatus { get; set; } = AttendanceStatus.NotRecorded;
 
-        /// <summary>
-        /// When attendance was last marked. Null while <see cref="AttendanceStatus"/> is
-        /// <see cref="AttendanceStatus.NotRecorded"/>.
-        /// </summary>
+        /// <summary>When attendance was last marked; null while the status is NotRecorded.</summary>
         public DateTime? AttendanceRecordedAt { get; set; }
     }
 }

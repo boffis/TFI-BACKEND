@@ -32,11 +32,8 @@ namespace GymManagement.Presentation.Middlewares
                 _ => ((int)HttpStatusCode.InternalServerError, "Internal server error", "Something went wrong. Please try again later.")
             };
 
-            // Only exceptions we deliberately throw with a short, user-facing message are ever
-            // shown to the client verbatim. Anything else — unexpected .NET/third-party exceptions,
-            // database errors, raw upstream API failures — could contain internal details or status
-            // codes not meant for clients, so it always gets the generic safeMessage above. The full
-            // detail is still captured server-side via the log line above.
+            // Only our own exceptions carry a message safe to show verbatim; anything else could
+            // leak internal detail, so it gets safeMessage. The full detail is logged above.
             bool isKnownAppException = exception is UnauthorizedException
                 or ForbiddenException
                 or ConflictException

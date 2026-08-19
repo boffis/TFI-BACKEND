@@ -25,34 +25,33 @@ namespace GymManagement.Infrastructure.Persistence
         {
             base.OnModelCreating(modelBuilder);
 
-            // TPT mapping — PK defined once on root; subtypes only declare their table
+            // TPT mapping: PK on the root, subtypes only declare their table.
             modelBuilder.Entity<User>().HasKey(u => u.UserId);
             modelBuilder.Entity<Client>().ToTable("Clients");
             modelBuilder.Entity<Trainer>().ToTable("Trainers");
             modelBuilder.Entity<Admin>().ToTable("Admins");
 
-            // Membership → User (1:N — full history per user)
+            // Membership → User, 1:N so the full history is kept.
             modelBuilder.Entity<User>()
                 .HasMany(u => u.Memberships)
                 .WithOne(m => m.User)
                 .HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Membership → MembershipPlan
             modelBuilder.Entity<Membership>()
                 .HasOne(m => m.MembershipPlan)
                 .WithMany()
                 .HasForeignKey(m => m.MembershipPlanId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Payment → User (preserves payment history across role changes)
+            // Payment → User, kept across role changes.
             modelBuilder.Entity<User>()
                 .HasMany(u => u.Payments)
                 .WithOne(p => p.User)
                 .HasForeignKey(p => p.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // Payment → Membership (Restrict — payment outlives the membership record)
+            // Restrict: a payment outlives its membership record.
             modelBuilder.Entity<Membership>()
                 .HasMany(m => m.Payments)
                 .WithOne(p => p.Membership)
@@ -67,68 +66,55 @@ namespace GymManagement.Infrastructure.Persistence
                 .Property(mp => mp.Price)
                 .HasColumnType("decimal(10,2)");
 
-            // Discontinued plans are filtered per-query in MembershipPlanRepository rather than by a
-            // global query filter: the admin list, the admin detail page and the membership history
-            // all need to read them back, and a global filter would silently drop the MembershipPlan
-            // navigation from every Membership pointing at a discontinued plan.
+            // Discontinued plans are filtered per-query in MembershipPlanRepository: a global filter
+            // would drop the MembershipPlan navigation from every Membership pointing at one.
 
-            // GymClass → User (TrainerId points at Users, not Trainers — preserves history across role changes)
+            // TrainerId points at Users, not Trainers, so history survives role changes.
             modelBuilder.Entity<GymClass>()
                 .HasOne(gc => gc.Trainer)
                 .WithMany()
                 .HasForeignKey(gc => gc.TrainerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // GymClassSchedule → User (same reasoning as GymClass)
+            // Same reasoning as GymClass above.
             modelBuilder.Entity<GymClassSchedule>()
                 .HasOne(gcs => gcs.Trainer)
                 .WithMany()
                 .HasForeignKey(gcs => gcs.TrainerId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            // GymClass → GymClassSchedule
             modelBuilder.Entity<GymClass>()
                 .HasOne(gc => gc.GymClassSchedule)
                 .WithMany(gcs => gcs.GymClasses)
                 .HasForeignKey(gc => gc.GymClassScheduleId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Inscription — surrogate PK
             modelBuilder.Entity<Inscription>()
                 .HasKey(i => i.InscriptionId);
 
-            // Unique filtered index: prevent double-enrolment when ClientId is set
+            // Filtered unique index: no double-enrolment while ClientId is set.
             modelBuilder.Entity<Inscription>()
                 .HasIndex(i => new { i.ClientId, i.GymClassId })
                 .IsUnique()
                 .HasFilter("[ClientId] IS NOT NULL");
 
-            // Inscription → Client (nullable, SetNull handled explicitly in service)
+            // Nullable; SetNull is handled explicitly in the service.
             modelBuilder.Entity<Inscription>()
                 .HasOne(i => i.Client)
                 .WithMany(c => c.Inscriptions)
                 .HasForeignKey(i => i.ClientId)
                 .OnDelete(DeleteBehavior.SetNull);
 
-            // Inscription → GymClass
             modelBuilder.Entity<Inscription>()
                 .HasOne(i => i.GymClass)
                 .WithMany(gc => gc.Inscriptions)
                 .HasForeignKey(i => i.GymClassId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // ── UTC instants ────────────────────────────────────────────────────────
-            // datetime2 stores no offset, so EF materialises these as DateTimeKind.Unspecified
-            // and System.Text.Json then writes them without a trailing "Z". A browser parses a
-            // date-time with no offset as *local* time, so every UTC timestamp read back from the
-            // database rendered three hours into the future for a client in Argentina.
-            // Re-tagging them on the way out makes the serialiser emit the "Z" again.
-            //
-            // Only real instants belong here. GymClass.Schedule and GymClassSchedule.TimeOfDay are
-            // deliberately the gym's local wall clock (see Application/Common/GymTime.cs) and must
-            // keep serialising without a zone — tagging those would shift every class by the gym's
-            // offset. The token expiries on User are UTC too but are never serialised, and are only
-            // ever compared against DateTime.UtcNow server-side, where Kind is irrelevant.
+            // datetime2 keeps no offset, so EF reads these back as Unspecified and the serialiser
+            // drops the "Z" — browsers then read them as local time. Re-tag on the way out.
+            // Only real instants belong here: GymClass.Schedule and GymClassSchedule.TimeOfDay are
+            // the gym's wall clock (see GymTime.cs) and must stay zone-less.
             var utcInstant = new ValueConverter<DateTime, DateTime>(
                 write => write,
                 read => DateTime.SpecifyKind(read, DateTimeKind.Utc));
@@ -141,7 +127,7 @@ namespace GymManagement.Infrastructure.Persistence
                 .Property(m => m.ExpirationDate)
                 .HasConversion(utcInstant);
 
-            // Nullable property, non-nullable converter: EF applies it only to non-null values.
+            // Non-nullable converter on a nullable property: EF applies it only to non-null values.
             modelBuilder.Entity<Inscription>()
                 .Property(i => i.AttendanceRecordedAt)
                 .HasConversion(utcInstant);

@@ -40,10 +40,7 @@ namespace GymManagement.Application.Services
             return plans.Select(ToResponse);
         }
 
-        /// <summary>
-        /// Admin listing: includes discontinued plans, flagged as such, so they can be reviewed
-        /// or restored. The public listing above never returns them.
-        /// </summary>
+        /// <summary>Admin listing: includes discontinued plans, flagged as such.</summary>
         public async Task<IEnumerable<MembershipPlanResponse>> GetAllPlansForAdminAsync()
         {
             var plans = await _membershipPlanRepository.GetAllIncludingDiscontinuedAsync();
@@ -63,8 +60,7 @@ namespace GymManagement.Application.Services
         {
             var plan = await _membershipPlanRepository.GetByIdAsync(id);
 
-            // This is the anonymous endpoint, so a discontinued plan is treated as gone rather than
-            // returned with a flag — admins read it through GetAdminPlanByIdAsync instead.
+            // Anonymous endpoint: a discontinued plan is gone, not flagged. Admins use GetAdminPlanByIdAsync.
             if (plan == null || plan.IsDeleted)
                 throw new NotFoundException($"Membership plan {id} not found.");
 
@@ -137,10 +133,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// When a plan's price changes, pushes the new amount to Mercado Pago for every
-        /// active (non-cancelled) subscriber's preapproval so their next charge reflects it,
-        /// and emails each of them a heads-up. Both steps are best-effort per subscriber —
-        /// one failure doesn't stop the rest, and neither blocks the price change itself.
+        /// Pushes a new price to every active subscriber's preapproval and emails them. Best-effort
+        /// per subscriber — one failure stops neither the rest nor the price change itself.
         /// </summary>
         private async Task SyncPriceChangeToSubscribersAsync(MembershipPlan plan, decimal previousPrice)
         {
@@ -178,14 +172,9 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Discontinues a plan. The plan row is kept and only flagged — Memberships references it
-        /// with ReferentialAction.Restrict, so a plan anyone ever subscribed to could never be
-        /// physically deleted anyway, and the payment history would lose its meaning if it were.
-        /// <para>
-        /// Nobody can buy or be assigned the plan afterwards, and it disappears from the public
-        /// pricing page, but existing subscribers are deliberately left active: their recurring
-        /// charge is stopped and their membership simply runs out at its own expiration date.
-        /// </para>
+        /// Discontinues a plan: flagged, never deleted, since Memberships restricts the FK and the
+        /// payment history depends on it. Existing subscribers stay active — their recurring charge
+        /// is stopped and their membership runs out at its own expiration date.
         /// </summary>
         public async Task DeletePlanAsync(Guid id)
         {
@@ -202,14 +191,9 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Restores a discontinued plan so it can be sold again.
-        /// <para>
-        /// This does not resurrect anything on the billing side: the Mercado Pago preapprovals
-        /// cancelled when the plan was discontinued are gone for good, and a cancelled preapproval
-        /// cannot be reactivated. Subscribers whose membership already lapsed have to subscribe
-        /// again; those still inside their paid period keep the access they were promised but their
-        /// AutoRenew stays false, because there is no live subscription left to charge them.
-        /// </para>
+        /// Puts a discontinued plan back on sale. Nothing is restored on the billing side: cancelled
+        /// preapprovals can't be reactivated, so old subscribers keep AutoRenew false and must
+        /// subscribe again once their paid period runs out.
         /// </summary>
         public async Task RestorePlanAsync(Guid id)
         {
@@ -224,21 +208,14 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Stops the recurring charge for everyone still holding a discontinued plan, without
-        /// revoking anything: IsCancelled stays false, so access and booked classes survive until
-        /// ExpirationDate passes and the membership lapses on its own.
-        /// <para>
-        /// Both halves are best-effort per subscriber — a preapproval Mercado Pago has already
-        /// lost, or a bouncing email address, must not stop the rest of the list being processed,
-        /// and neither undoes the discontinue itself.
-        /// </para>
+        /// Stops the recurring charge for holders of a discontinued plan without revoking anything:
+        /// IsCancelled stays false, so access survives to ExpirationDate. Best-effort per subscriber.
         /// </summary>
         private async Task StopRenewalsForSubscribersAsync(MembershipPlan plan)
         {
             var memberships = await _membershipRepository.GetByPlanId(plan.MembershipPlanId);
 
-            // Cancelled memberships have nothing left to charge. Expired-but-not-cancelled ones do
-            // still count: their preapproval is live and would happily charge the card again.
+            // Expired-but-not-cancelled still counts: its preapproval would charge the card again.
             var subscribers = memberships.Where(m => !m.IsCancelled).ToList();
             if (subscribers.Count == 0) return;
 
@@ -246,11 +223,8 @@ namespace GymManagement.Application.Services
             {
                 if (!membership.AutoRenew) continue;
 
-                // Persisted *before* calling Mercado Pago, not after. Cancelling the preapproval
-                // makes MP send back a "cancelled" notification, and the webhook handler reads
-                // AutoRenew to tell our own cancellation apart from a client walking away. If the
-                // flag were still true when that notification landed, the handler would mark the
-                // membership cancelled and strip the client's upcoming class inscriptions.
+                // Persisted *before* calling MP: the webhook reads AutoRenew to tell our own
+                // cancellation apart from a client walking away, and would otherwise revoke access.
                 await _membershipRepository.SetAutoRenewAsync(membership, false);
 
                 if (string.IsNullOrWhiteSpace(membership.MpPreapprovalId)) continue;
@@ -277,9 +251,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Tells every affected client their plan was discontinued, when their access ends and that
-        /// nothing further will be charged. Sent over a single SMTP connection, and never allowed to
-        /// fail the discontinue that already happened.
+        /// Tells affected clients when their access ends and that nothing further will be charged.
+        /// One SMTP connection, and never allowed to fail the discontinue that already happened.
         /// </summary>
         private async Task NotifySubscribersOfDiscontinuationAsync(
             MembershipPlan plan,
@@ -289,9 +262,7 @@ namespace GymManagement.Application.Services
 
             foreach (var membership in subscribers)
             {
-                // A membership still waiting on the Mercado Pago webhook has no real date yet
-                // (ExpirationDate is left at DateTime.MinValue until it activates), so promising
-                // one would be a lie. Those clients get the same news without a date.
+                // Still waiting on the MP webhook: ExpirationDate is MinValue, so promise no date.
                 bool hasExpiry = membership.ExpirationDate != DateTime.MinValue;
 
                 string accessLine = hasExpiry

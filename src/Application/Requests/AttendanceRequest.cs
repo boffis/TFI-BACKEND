@@ -2,10 +2,7 @@ using GymManagement.Domain.Enums;
 
 namespace GymManagement.Application.Requests
 {
-    /// <summary>
-    /// One roster submission: the trainer marks the whole class at once and saves,
-    /// so the client sends every row it wants to change in a single request.
-    /// </summary>
+    /// <summary>One roster submission: every row the trainer changed, in a single request.</summary>
     public class AttendanceRequest
     {
         public List<AttendanceEntryRequest> Entries { get; set; } = [];

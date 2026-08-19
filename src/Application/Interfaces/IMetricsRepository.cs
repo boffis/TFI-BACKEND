@@ -3,12 +3,8 @@ using GymManagement.Application.Responses;
 namespace GymManagement.Application.Interfaces
 {
     /// <summary>
-    /// Aggregate queries behind the admin metrics dashboard.
-    /// <para>
-    /// Every method here must aggregate in the database rather than materialising rows and counting
-    /// them in memory. A reporting screen is exactly where a naive implementation quietly loads
-    /// every payment and inscription in the gym.
-    /// </para>
+    /// Aggregate queries behind the admin metrics dashboard. Every method must aggregate in the
+    /// database, not by materialising rows and counting them in memory.
     /// </summary>
     public interface IMetricsRepository
     {
@@ -16,10 +12,8 @@ namespace GymManagement.Application.Interfaces
         Task<(decimal Total, int Count)> GetRevenueTotalAsync(IReadOnlyCollection<string> revenueStates);
 
         /// <summary>
-        /// Date, amount and state of every payment since <paramref name="utcFrom"/>. Returned as rows
-        /// rather than pre-grouped because calendar months depend on the gym's time zone, which SQL
-        /// Server has no way to apply — the grouping happens in the service. The window is bounded,
-        /// so this is one query over a small slice, not a full table load.
+        /// Every payment since <paramref name="utcFrom"/>, ungrouped: calendar months depend on the
+        /// gym's time zone, which SQL Server can't apply, so the service groups them.
         /// </summary>
         Task<List<PaymentPoint>> GetPaymentsSinceAsync(DateTime utcFrom);
 
@@ -30,9 +24,7 @@ namespace GymManagement.Application.Interfaces
 
         Task<List<PlanMetricsResponse>> GetPlanBreakdownAsync(IReadOnlyCollection<string> revenueStates);
 
-        /// <summary>
-        /// Class totals. Bounds are gym wall-clock values, matching how <c>GymClass.Schedule</c> is stored.
-        /// </summary>
+        /// <summary>Class totals. Bounds are gym wall-clock, matching <c>GymClass.Schedule</c>.</summary>
         Task<ClassCounts> GetClassCountsAsync(DateTime windowStart, DateTime now);
 
         Task<List<PopularClassResponse>> GetPopularClassesAsync(DateTime windowStart, DateTime now, int take);

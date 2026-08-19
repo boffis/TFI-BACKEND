@@ -43,11 +43,8 @@ namespace GymManagement.Application.Services
         {
             ExpireUnconfirmedUsers();
 
-            // Fetch every active membership once and index it by user, instead of querying
-            // per client (an N+1: one round-trip to the database for each client in the gym).
-            // GroupBy before ToDictionary because a user can hold more than one non-cancelled
-            // membership — ToDictionary throws on duplicate keys — and in that case the one
-            // that matters is whichever expires last.
+            // One query indexed by user, not one per client (N+1). GroupBy first: a user can hold
+            // more than one non-cancelled membership, and the one that matters expires last.
             var activeMembershipByUserId = (await _membershipRepository.GetAllActive())
                 .GroupBy(m => m.UserId)
                 .ToDictionary(g => g.Key, g => g.MaxBy(m => m.ExpirationDate)!);
@@ -218,7 +215,7 @@ namespace GymManagement.Application.Services
             var user = GetUserEntityById(id);
             if (user == null) return false;
 
-            // For Trainers: block if they still have future classes assigned
+            // Trainers: blocked while they still have future classes assigned.
             if (user is Trainer)
             {
                 var hasFutureClasses = _gymClassRepository.GetByTrainerId(id)
@@ -228,9 +225,8 @@ namespace GymManagement.Application.Services
                         "This trainer has future classes assigned. Reassign or delete them before deleting their account.");
             }
 
-            // For Clients: an active membership must not keep billing a deleted account.
-            // Cancels via Mercado Pago (when billed through a preapproval) and locally,
-            // which also frees the client's future class inscriptions.
+            // Clients: an active membership must not keep billing a deleted account. Cancelling
+            // also frees their future class inscriptions.
             if (user is Client)
             {
                 var activeMembership = await _membershipRepository.GetActiveByUserId(id);
@@ -238,7 +234,7 @@ namespace GymManagement.Application.Services
                     await _membershipBillingService.AdminCancelSubscriptionAsync(activeMembership.MembershipId);
             }
 
-            // For Admins: block if this is the last remaining admin account
+            // Admins: the last remaining account can't be deleted.
             if (user is Admin && _adminRepository.GetAll().Count <= 1)
                 throw new ConflictException(
                     "This is the last remaining admin account. Create another admin before deleting this one.");
@@ -270,18 +266,16 @@ namespace GymManagement.Application.Services
             var currentRole = user.GetType().Name;
             if (currentRole.Equals(newRole, StringComparison.OrdinalIgnoreCase)) return true;
 
-            // 1. If current role is Client, handle membership and inscriptions
             if (user is Client)
             {
-                // Cancel active membership. Same as account deletion: cancels via Mercado Pago
-                // (when billed through a preapproval) and locally, so a role change doesn't leave
-                // a subscription billing an account that's no longer a client.
+                // Same as account deletion, so a role change doesn't leave a subscription billing
+                // an account that is no longer a client.
                 var activeMembership = await _membershipRepository.GetActiveByUserId(id);
                 if (activeMembership != null)
                     await _membershipBillingService.AdminCancelSubscriptionAsync(activeMembership.MembershipId);
 
-                // Handle inscriptions: delete future ones (free the spot), nullify past ones (keep attendance record).
-                // Future ones may already be gone via the cancellation above; this loop is a no-op for those.
+                // Future inscriptions are deleted to free the spot, past ones nullified to keep the
+                // attendance record. The cancellation above may already have removed the future ones.
                 var inscriptions = _inscriptionRepository.GetByClientId(id);
                 foreach (var inscription in inscriptions)
                 {
@@ -292,8 +286,7 @@ namespace GymManagement.Application.Services
                 }
             }
 
-            // 2. Hard-delete the old role subtype row
-            //    For Trainers: block if they still have future classes assigned
+            // Hard-delete the old role row. Trainers are blocked while they have future classes.
             if (user is Trainer)
             {
                 var hasFutureClasses = _gymClassRepository.GetByTrainerId(id)
@@ -303,7 +296,7 @@ namespace GymManagement.Application.Services
                         "This trainer has future classes assigned. Reassign or delete them before changing their role.");
             }
 
-            //    For Admins: block if this is the last remaining admin account
+            // The last remaining admin can't be demoted.
             if (user is Admin && _adminRepository.GetAll().Count <= 1)
                 throw new ConflictException(
                     "This is the last remaining admin account. Create another admin before changing this one's role.");
@@ -312,7 +305,7 @@ namespace GymManagement.Application.Services
             else if (user is Trainer) _trainerRepository.HardDelete(id);
             else if (user is Admin) _adminRepository.HardDelete(id);
 
-            // 3. Insert the new role row, copying all base User fields
+            // Insert the new role row, copying all base User fields.
             switch (newRole.ToLower())
             {
                 case "client":

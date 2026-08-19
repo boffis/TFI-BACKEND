@@ -1,12 +1,8 @@
 namespace GymManagement.Application.Responses
 {
     /// <summary>
-    /// Everything the admin metrics dashboard needs, in one response.
-    /// <para>
-    /// This is a read model: the shapes below are what the dashboard renders, and the repository
-    /// projects straight into them. Adding a parallel set of near-identical "query result" types
-    /// would double the code without protecting anything — nothing writes through this path.
-    /// </para>
+    /// Everything the admin metrics dashboard needs, in one response. A read model: the repository
+    /// projects straight into these shapes, since nothing writes through this path.
     /// </summary>
     public class MetricsResponse
     {
@@ -20,10 +16,7 @@ namespace GymManagement.Application.Responses
         /// <summary>How many days the "recent" windows (classes, attendance, trainers) cover.</summary>
         public int RecentWindowDays { get; set; }
 
-        /// <summary>
-        /// Which <c>Payment.PaymentState</c> values were counted as money received. Surfaced so the
-        /// dashboard can state its own assumption instead of presenting a total with no provenance.
-        /// </summary>
+        /// <summary>Which <c>Payment.PaymentState</c> values counted as money received.</summary>
         public List<string> RevenueStates { get; set; } = [];
     }
 
@@ -36,10 +29,7 @@ namespace GymManagement.Application.Responses
         /// <summary>Oldest month first, so the dashboard can render it as a left-to-right timeline.</summary>
         public List<MonthlyRevenueResponse> ByMonth { get; set; } = [];
 
-        /// <summary>
-        /// Every payment state present in the database with its count and value. This is what makes
-        /// the revenue figure auditable — an unexpected state showing up here explains a gap.
-        /// </summary>
+        /// <summary>Count and value per payment state — what makes the revenue figure auditable.</summary>
         public List<PaymentStateResponse> ByState { get; set; } = [];
     }
 

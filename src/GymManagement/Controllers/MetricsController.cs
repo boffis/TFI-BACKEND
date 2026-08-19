@@ -18,10 +18,7 @@ namespace GymManagement.Presentation.Controllers
             _metricsService = metricsService;
         }
 
-        /// <summary>
-        /// Aggregate figures for the admin dashboard: revenue, membership, class occupancy,
-        /// attendance and per-trainer activity.
-        /// </summary>
+        /// <summary>Admin dashboard figures: revenue, membership, occupancy, attendance, trainers.</summary>
         [HttpGet]
         public async Task<ActionResult<MetricsResponse>> Get()
         {

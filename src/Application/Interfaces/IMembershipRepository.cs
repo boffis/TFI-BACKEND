@@ -12,10 +12,7 @@ namespace GymManagement.Application.Interfaces
 
         Task<Membership?> GetActiveByUserId(Guid userId);
 
-        /// <summary>
-        /// Every non-cancelled membership, in a single query. Lets callers that need the
-        /// membership status of many users at once avoid one round-trip per user.
-        /// </summary>
+        /// <summary>Every non-cancelled membership in one query, avoiding a round-trip per user.</summary>
         Task<List<Membership>> GetAllActive();
 
         Task<List<Membership>> GetByPlanId(Guid planId);
@@ -25,9 +22,8 @@ namespace GymManagement.Application.Interfaces
         Task ChangeMembership(Membership membership);
 
         /// <summary>
-        /// Persists only the renewal flag. GetByPlanId includes the User navigation, and
-        /// ChangeMembership's DbSet.Update marks the whole tracked graph as modified — which would
-        /// rewrite every subscriber's User row just to turn one boolean off.
+        /// Persists only the renewal flag: DbSet.Update would mark the whole tracked graph modified
+        /// and rewrite every subscriber's User row to turn one boolean off.
         /// </summary>
         Task SetAutoRenewAsync(Membership membership, bool autoRenew);
 

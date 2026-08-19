@@ -75,10 +75,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Admin-only path for a client who paid in cash, outside Mercado Pago. Unlike
-        /// AddMembership (which starts the membership pending until the MP webhook activates it),
-        /// this activates it immediately since the cash payment was already received in person, and
-        /// records a matching Payment row so it shows up in the client's payment history.
+        /// Admin path for cash paid in person: activates immediately instead of waiting on the MP
+        /// webhook, and records a matching Payment row for the client's history.
         /// </summary>
         public async Task<MembershipResponse> GrantCashMembershipAsync(MembershipRequest request)
         {
@@ -139,10 +137,8 @@ namespace GymManagement.Application.Services
             var existingMembership = await _membershipRepository.GetMembershipById(membershipId);
             if (existingMembership == null) return false;
 
-            // A discontinued plan is refused here as well: moving a client onto one would hand them
-            // a membership that renews on a plan the gym no longer sells. ActivateMembershipAsync
-            // deliberately does not check this — it finishes activating memberships that were
-            // already bought, which must still work after the plan is discontinued.
+            // Discontinued plans are refused here, but not in ActivateMembershipAsync — that one
+            // finishes memberships already bought, which must still work after a plan is retired.
             var plan = await _membershipPlanRepository.GetByIdAsync(request.MembershipPlanId);
             if (plan == null || plan.IsDeleted) return false;
 
@@ -181,26 +177,13 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// A client may hold at most one non-cancelled membership at a time. An existing membership
-        /// that is still active, or a Mercado Pago subscription still awaiting webhook activation
-        /// (ExpirationDate left at DateTime.MinValue), blocks creating a new one until it's changed
-        /// or cancelled. An expired membership no longer counts as "theirs" though — it's retired
-        /// here automatically so it can't be mistaken for the active one, and the caller is free to
-        /// create the replacement.
-        /// <para>
-        /// Retiring goes through the billing service rather than just setting IsCancelled: a
-        /// membership normally expires *because* its renewal charge kept failing, so its Mercado Pago
-        /// preapproval is usually still live and would carry on billing a client whose membership
-        /// reads as cancelled everywhere in the app. If Mercado Pago cannot confirm the cancellation
-        /// this throws BillingUnavailableException and nothing is persisted, failing the caller's
-        /// whole operation rather than leaving an orphaned subscription behind.
-        /// </para>
+        /// One non-cancelled membership per client. An active one — or an MP subscription still
+        /// awaiting webhook activation — blocks a new one; an expired one is retired here instead.
+        /// Retiring goes through the billing service, not a bare IsCancelled, because an expired
+        /// membership's preapproval is usually still live and would keep billing. Throws
+        /// BillingUnavailableException and persists nothing if MP can't confirm the cancellation.
         /// </summary>
-        /// <param name="selfService">
-        /// True when the client is buying for themselves, so the conflict is phrased for them and
-        /// points at the cancel button on their account page. False for the admin paths, which speak
-        /// about the client in the third person and can also just switch the existing plan.
-        /// </param>
+        /// <param name="selfService">True phrases the conflict for the client, false for admins.</param>
         public async Task EnsureNoConflictingMembershipAsync(Guid userId, bool selfService = false)
         {
             var existingMembership = await _membershipRepository.GetActiveByUserId(userId);
@@ -211,11 +194,8 @@ namespace GymManagement.Application.Services
 
             if (isExpired)
             {
-                // Resolved here rather than through the constructor: the IMembershipBillingService
-                // implementation (MercadoPagoService) takes this class as a dependency, so
-                // constructor-injecting it would make the two a cycle the DI container refuses to
-                // build. By the time this runs both are already constructed and cached in the
-                // request scope, so this just hands back the existing instance.
+                // Resolved here, not injected: MercadoPagoService depends on this class, so
+                // constructor injection would be a cycle the DI container refuses to build.
                 var billingService = _serviceProvider.GetRequiredService<IMembershipBillingService>();
                 await billingService.RetireSupersededMembershipAsync(existingMembership);
                 return;

@@ -1,14 +1,8 @@
 namespace GymManagement.Application.Common
 {
     /// <summary>
-    /// The gym's local wall-clock time.
-    /// <para>
-    /// Class schedules (<c>GymClass.Schedule</c>, <c>GymClassSchedule.TimeOfDay</c>) are stored
-    /// without a time zone and mean local time at the gym, so they must be compared against
-    /// <see cref="Now"/> — against <c>DateTime.UtcNow</c> they are wrong by the gym's offset.
-    /// Everything else (membership expiries, payment dates, tokens) is a real instant and stays
-    /// on <c>DateTime.UtcNow</c>.
-    /// </para>
+    /// The gym's local wall-clock time. Class schedules are stored without a zone and must be
+    /// compared against <see cref="Now"/>; everything else is a real instant on <c>DateTime.UtcNow</c>.
     /// </summary>
     public static class GymTime
     {

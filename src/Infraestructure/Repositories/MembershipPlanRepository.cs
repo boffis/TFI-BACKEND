@@ -48,9 +48,7 @@ namespace GymManagement.Infrastructure.Repositories
             await _context.SaveChangesAsync();
         }
 
-        // Soft delete. A hard Remove() would be refused by SQL Server anyway: Memberships references
-        // MembershipPlans with ReferentialAction.Restrict, so any plan a client ever subscribed to
-        // — even a long-cancelled membership — can never be physically deleted.
+        // Soft delete: Memberships restricts the FK, so a plan anyone ever bought can't be removed.
         public async Task DeleteAsync(Guid id)
         {
             var plan = await _context.MembershipPlans.FindAsync(id);

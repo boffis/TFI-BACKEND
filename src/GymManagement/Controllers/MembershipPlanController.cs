@@ -36,10 +36,7 @@ namespace GymManagement.Controllers
             return Ok(plan);
         }
 
-        /// <summary>
-        /// Admin listing. Unlike the anonymous GetAll above, this includes discontinued plans
-        /// (flagged with IsDeleted) so they can be reviewed or restored from the dashboard.
-        /// </summary>
+        /// <summary>Admin listing: unlike GetAll above, includes discontinued plans, flagged IsDeleted.</summary>
         [HttpGet("admin")]
         [Authorize(Policy = Policies.OnlyAdmin)]
         public async Task<ActionResult<IEnumerable<MembershipPlanResponse>>> GetAllForAdmin()
@@ -72,10 +69,7 @@ namespace GymManagement.Controllers
             return Ok(plan);
         }
 
-        /// <summary>
-        /// Discontinues the plan (soft delete). Existing subscribers keep their membership until it
-        /// expires; only the recurring charge stops. See MembershipPlanService.DeletePlanAsync.
-        /// </summary>
+        /// <summary>Soft delete: subscribers keep their membership until it expires, only the charge stops.</summary>
         [HttpDelete("{id}")]
         [Authorize(Policy = Policies.OnlyAdmin)]
         public async Task<ActionResult> Delete(Guid id)

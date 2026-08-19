@@ -26,24 +26,6 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
     });
 
-//builder.Services.AddSwaggerGen(options =>
-//{
-//options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-//{
-//    Name = "Authorization",
-//    Type = SecuritySchemeType.Http,
-//    Scheme = "bearer",
-//    BearerFormat = "JWT",
-//    In = ParameterLocation.Header,
-//    Description = "Ingresá el token JWT. No hace falta escribir 'Bearer', Swagger lo agrega solo."
-//});
-
-//    options.AddSecurityRequirement(document => new OpenApiSecurityRequirement
-//    {
-//        { new OpenApiSecuritySchemeReference("Bearer", document), [] }
-//    });
-//});
-
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("GymManagementConnectionString"),
@@ -73,11 +55,9 @@ builder.Services.AddScoped<GymClassScheduleService>();
 builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
 builder.Services.AddScoped<PaymentService>();
 
-// Default HttpClient (used by CreateSubscriptionAsync via IHttpClientFactory.CreateClient())
 builder.Services.AddHttpClient();
 
-// Named HttpClient for Mercado Pago cancellation with Polly retry policy:
-// Retries up to 10 times on transient HTTP errors (5xx, 408) with exponential backoff.
+// Mercado Pago cancellations: up to 10 Polly retries with exponential backoff.
 builder.Services.AddHttpClient("MercadoPago")
     .AddPolicyHandler(HttpPolicyExtensions
         .HandleTransientHttpError()   // 5xx + 408
@@ -86,7 +66,6 @@ builder.Services.AddHttpClient("MercadoPago")
             sleepDurationProvider: attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)),
             onRetry: (outcome, timespan, attempt, _) =>
             {
-                // Log retry attempts (visible in Azure App Service logs)
                 Console.WriteLine($"[MercadoPago] Retry {attempt} after {timespan.TotalSeconds:F1}s — {outcome.Exception?.Message ?? outcome.Result?.StatusCode.ToString()}");
             }));
 
@@ -149,11 +128,8 @@ using (var scope = app.Services.CreateScope())
 {
     var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-    // Migrations are applied by the deploy pipeline (`dotnet ef database update` in
-    // .github/workflows/main_tfi-api.yml) so that they run exactly once per release.
-    // Running them here too would let several App Service instances migrate the same
-    // database concurrently on start-up. In Development there is no pipeline, so the
-    // app still migrates itself.
+    // The deploy pipeline migrates once per release; doing it here too would let several App
+    // Service instances migrate concurrently. Development has no pipeline, so it self-migrates.
     if (app.Environment.IsDevelopment())
     {
         context.Database.Migrate();

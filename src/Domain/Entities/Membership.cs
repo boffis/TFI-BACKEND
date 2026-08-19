@@ -16,19 +16,15 @@ namespace GymManagement.Domain.Entities
         public bool IsCancelled { get; set; } = false;
 
         /// <summary>
-        /// False once the recurring charge has been deliberately stopped while the membership is
-        /// still meant to run to its expiration date — currently only when an admin discontinues
-        /// the plan. The Mercado Pago preapproval is cancelled at that moment, so the webhook that
-        /// reports it must not read the cancellation as a revocation (see ProcessWebhookNotificationAsync).
-        /// Access keeps working until ExpirationDate; nothing renews it afterwards.
+        /// False once the recurring charge was deliberately stopped while the membership runs on to
+        /// ExpirationDate (an admin discontinued the plan). The webhook reads this to tell our own
+        /// preapproval cancellation apart from a revocation.
         /// </summary>
         public bool AutoRenew { get; set; } = true;
 
         public DateTime ExpirationDate { get; set; }
 
-        /// <summary>
-        /// Mercado Pago Preapproval ID. Stored when the user subscribes so we can cancel it later.
-        /// </summary>
+        /// <summary>Mercado Pago preapproval id, stored so the subscription can be cancelled later.</summary>
         public string? MpPreapprovalId { get; set; }
 
         public ICollection<Payment> Payments { get; set; } = [];

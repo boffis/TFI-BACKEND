@@ -14,9 +14,8 @@ namespace GymManagement.Application.Interfaces
         Task<IEnumerable<MembershipPlan>> GetAllIncludingDiscontinuedAsync();
 
         /// <summary>
-        /// Returns the plan whether or not it is discontinued — existing memberships, the admin
-        /// detail page and payment history all need to read discontinued plans back. Callers that
-        /// must refuse a discontinued plan (new purchases, plan changes) check IsDeleted themselves.
+        /// Returns the plan discontinued or not — memberships and payment history need to read those
+        /// back. Callers that must refuse one (new purchases, plan changes) check IsDeleted.
         /// </summary>
         Task<MembershipPlan?> GetByIdAsync(Guid id);
 

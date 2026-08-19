@@ -46,7 +46,7 @@ namespace GymManagement.Infrastructure.Services
                     return false; // Email strictly in use
                 }
 
-                // If user exists but is not confirmed, check if expired (48hs)
+                // Unconfirmed user: has the 48h token expired?
                 if (existingUser.EmailConfirmationTokenExpiration.HasValue &&
                     existingUser.EmailConfirmationTokenExpiration.Value < DateTime.UtcNow)
                 {
@@ -54,7 +54,7 @@ namespace GymManagement.Infrastructure.Services
                 }
                 else
                 {
-                    // Unconfirmed user exists and token is still valid. Delete existing draft to re-issue
+                    // Token still valid: drop the draft so it can be re-issued.
                     _userRepository.RemoveUser(existingUser);
                 }
             }
@@ -168,7 +168,7 @@ namespace GymManagement.Infrastructure.Services
 
             if (user == null || !user.IsEmailConfirmed || user.IsUserDeleted)
             {
-                // Return true to prevent email enumeration attack
+                // True regardless, to prevent email enumeration.
                 return true;
             }
 

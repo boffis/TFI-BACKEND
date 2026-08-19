@@ -44,10 +44,7 @@ namespace GymManagement.Presentation.Controllers
             return Ok(payment);
         }
 
-        /// <summary>
-        /// Grants a client a membership paid in cash, in person. Activates the membership
-        /// immediately (no MP webhook to wait for) and logs a matching "cash"/"approved" Payment.
-        /// </summary>
+        /// <summary>Cash membership: activates immediately and logs a "cash"/"approved" Payment.</summary>
         [HttpPost("GrantCashMembership")]
         [Authorize(Policy = Policies.OnlyAdmin)]
         public async Task<IActionResult> GrantCashMembership([FromBody] MembershipRequest request)
@@ -56,9 +53,7 @@ namespace GymManagement.Presentation.Controllers
             return Ok(response);
         }
 
-        /// <summary>
-        /// Legacy: creates a Mercado Pago Preference (redirect flow). Kept for reference.
-        /// </summary>
+        /// <summary>Legacy Mercado Pago Preference (redirect flow). Kept for reference.</summary>
         [HttpPost("CreatePayment")]
         [Authorize(Policy = Policies.OnlyClient)]
         public async Task<IActionResult> CreatePayment(Guid membershipId)
@@ -68,12 +63,8 @@ namespace GymManagement.Presentation.Controllers
         }
 
         /// <summary>
-        /// Mercado Pago Webhook notification endpoint.
-        /// Publicly accessible (no JWT required) so Mercado Pago can post notifications.
-        /// Validates x-signature header if WebhookSecret is configured.
-        /// Supports both JSON payload and Query string notifications (Webhooks & IPN).
-        /// Returns 200 immediately to acknowledge receipt, then processes the notification
-        /// in the background using a dedicated DI scope to avoid DbContext disposal issues.
+        /// Mercado Pago webhook endpoint — anonymous, signature-checked, accepting both JSON and
+        /// query-string notifications. Returns 200 at once and processes in a background DI scope.
         /// </summary>
         [HttpPost("webhook")]
         [AllowAnonymous]
@@ -92,15 +83,12 @@ namespace GymManagement.Presentation.Controllers
 
             if (!string.IsNullOrEmpty(resourceId))
             {
-                // Validate HMAC-SHA256 signature if WebhookSecret is configured
                 if (!_mercadoPagoService.ValidateWebhookSignature(xSignature, requestId, resourceId))
                 {
                     return Unauthorized("Invalid webhook signature.");
                 }
 
-                // Fire-and-forget: process in background so MP gets 200 immediately.
-                // A new DI scope is created for the background work so that the scoped
-                // MercadoPagoService (and its DbContext) are not disposed with this request.
+                // Fire-and-forget in its own DI scope, so the scoped DbContext outlives this request.
                 _ = Task.Run(async () =>
                 {
                     await using var scope = _scopeFactory.CreateAsyncScope();
@@ -109,16 +97,12 @@ namespace GymManagement.Presentation.Controllers
                 });
             }
 
-            // Always respond HTTP 200 OK immediately to acknowledge receipt to Mercado Pago
             return Ok();
         }
 
-        // ─── Subscription endpoints ───────────────────────────────────────────────────
-
         /// <summary>
-        /// Creates a recurring subscription using the card token from the Card Payment Brick.
-        /// The authenticated user's ID is extracted from their JWT. 
-        /// Body must match the frontend's formData plus membershipPlanId.
+        /// Creates a recurring subscription from the Card Payment Brick token. Body is the
+        /// frontend's formData plus membershipPlanId; the user comes from the JWT.
         /// </summary>
         [HttpPost("Subscribe")]
         [Authorize(Policy = Policies.OnlyClient)]
@@ -129,10 +113,7 @@ namespace GymManagement.Presentation.Controllers
             return Ok(result);
         }
 
-        /// <summary>
-        /// Cancels the user's active recurring subscription.
-        /// Only the owner of the membership (verified via JWT) can cancel it.
-        /// </summary>
+        /// <summary>Cancels the caller's own recurring subscription (ownership verified via JWT).</summary>
         [HttpPost("Unsubscribe/{membershipId}")]
         [Authorize(Policy = Policies.OnlyClient)]
         public async Task<IActionResult> Unsubscribe(Guid membershipId)
@@ -142,10 +123,7 @@ namespace GymManagement.Presentation.Controllers
             return Ok(new { message = "Suscripción cancelada exitosamente." });
         }
 
-        /// <summary>
-        /// Admin-only: revokes a client's membership regardless of who owns it. Cancels the
-        /// underlying Mercado Pago subscription too, if there is one, so billing actually stops.
-        /// </summary>
+        /// <summary>Admin: revokes any client's membership and cancels its MP subscription.</summary>
         [HttpPost("AdminRevokeMembership/{membershipId}")]
         [Authorize(Policy = Policies.OnlyAdmin)]
         public async Task<IActionResult> AdminRevokeMembership(Guid membershipId)

@@ -5,21 +5,13 @@ using GymManagement.Application.Responses;
 
 namespace GymManagement.Application.Services
 {
-    /// <summary>
-    /// Assembles the admin metrics dashboard.
-    /// </summary>
+    /// <summary>Assembles the admin metrics dashboard.</summary>
     public class MetricsService
     {
         /// <summary>
-        /// Payment states that count as money actually received.
-        /// <para>
-        /// Mercado Pago also reports <c>pending</c>, <c>in_process</c>, <c>rejected</c>,
-        /// <c>cancelled</c> and <c>refunded</c>; none of those mean the gym was paid. Matching is
-        /// case-insensitive because the same state is written with different casing depending on
-        /// which code path created the payment. Every state found in the database is reported in
-        /// <see cref="RevenueMetricsResponse.ByState"/>, so a total that looks low can be explained
-        /// rather than guessed at.
-        /// </para>
+        /// Payment states that count as money received. Everything else Mercado Pago reports
+        /// (pending, rejected, refunded…) is surfaced in <see cref="RevenueMetricsResponse.ByState"/>
+        /// so a low total can be explained rather than guessed at.
         /// </summary>
         private static readonly string[] RevenueStates = ["approved"];
 
@@ -38,8 +30,7 @@ namespace GymManagement.Application.Services
 
         public async Task<MetricsResponse> GetMetricsAsync()
         {
-            // Classes are stored as gym wall-clock values; payments are UTC instants. Each section
-            // is bounded with the clock that matches the data it reads.
+            // Classes are gym wall-clock, payments are UTC — each window uses its own clock.
             var gymNow = GymTime.Now;
             var classWindowStart = gymNow.AddDays(-RecentWindowDays);
 
@@ -106,17 +97,16 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Buckets payments into gym-local calendar months, including months with no payments so the
-        /// dashboard shows a continuous timeline rather than skipping quiet periods.
+        /// Buckets payments into gym-local calendar months, empty months included so the timeline
+        /// stays continuous.
         /// </summary>
         private static List<MonthlyRevenueResponse> GroupByGymMonth(
             List<PaymentPoint> payments, DateTime firstMonthStart, DateTime gymNow)
         {
             var paid = payments
                 .Where(p => IsRevenue(p.PaymentState))
-                // Payment dates are UTC instants; month boundaries are a gym-local question. A
-                // payment at 22:00 on the 31st in Buenos Aires is 01:00 on the 1st in UTC, and
-                // grouping the raw value would file it under the wrong month.
+                // Month boundaries are gym-local: 22:00 on the 31st in Buenos Aires is the 1st in
+                // UTC, so grouping the raw value files it under the wrong month.
                 .Select(p => new { Local = GymTime.ToGymTime(p.PaymentDate), p.Price })
                 .GroupBy(p => new { p.Local.Year, p.Local.Month })
                 .ToDictionary(

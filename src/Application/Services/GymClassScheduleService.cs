@@ -59,9 +59,8 @@ namespace GymManagement.Application.Services
         }
 
         /// <summary>
-        /// Detail lookup for the client-facing schedule page. Unlike <see cref="GetAdminScheduleById"/>,
-        /// only sessions that haven't happened yet are included — clients shouldn't see past sessions
-        /// listed as bookable.
+        /// Client-facing detail lookup. Unlike <see cref="GetAdminScheduleById"/>, only sessions that
+        /// haven't happened yet are included.
         /// </summary>
         public GymClassScheduleDetailResponse GetPublicScheduleById(Guid id)
         {
@@ -149,12 +148,11 @@ namespace GymManagement.Application.Services
                 if (schedule.TrainerId != requestingUserId)
                     throw new ForbiddenException("You can't modify a schedule that isn't yours.");
 
-                // A Trainer cannot reassign the schedule to a different trainer
                 if (request.TrainerId != requestingUserId)
                     throw new ForbiddenException("You can't reassign a schedule to another trainer.");
             }
 
-            // If the trainer is being changed (Admin path), validate the new trainer
+            // Admin path: validate the incoming trainer.
             Trainer? newTrainer = null;
             if (request.TrainerId != schedule.TrainerId)
             {
@@ -181,11 +179,8 @@ namespace GymManagement.Application.Services
                     gymClass.ClassName = request.ClassName;
                     gymClass.ClassDescription = request.ClassDescription;
                     gymClass.MaxCapacity = request.MaxCapacity;
-                    // If DayOfWeek or TimeOfDay changed, we'd theoretically need to recalculate Schedule Date.
-                    // For now, we only update metadata. Modifying the actual datetime of already generated classes might require more complex logic.
-                    //!Im Not Doing That
-
-                    // Propagate trainer change to upcoming classes
+                    // Only metadata is propagated — a DayOfWeek/TimeOfDay change would mean
+                    // recalculating the date of every already-generated class.
                     if (newTrainer != null)
                     {
                         gymClass.TrainerId = newTrainer.UserId;
@@ -209,8 +204,7 @@ namespace GymManagement.Application.Services
                     .Where(gc => gc.GymClassScheduleId == scheduleId && gc.Schedule >= GymTime.Now)
                     .ToList();
 
-                // One batch for every affected session, so a schedule with weeks of upcoming
-                // classes still costs a single SMTP connection rather than one per email.
+                // One batch for every session, so weeks of classes cost a single SMTP connection.
                 await _notifications.NotifyClassesCancelledAsync(upcomingClasses);
 
                 foreach (var gymClass in upcomingClasses)
@@ -224,9 +218,7 @@ namespace GymManagement.Application.Services
         {
             var createdClasses = new List<GymClassResponse>();
             var activeSchedules = _scheduleRepository.GetActiveSchedules();
-            // Local date, not UTC: sessions are built as `date + schedule.TimeOfDay`, and
-            // TimeOfDay is a wall-clock time. Starting from the UTC date would generate for
-            // the wrong day whenever the two disagree (any evening in Argentina).
+            // Local date, not UTC: TimeOfDay is wall-clock, so a UTC start generates the wrong day.
             var startDate = GymTime.Today;
             var endDate = startDate.AddDays(daysAhead);
 
@@ -238,7 +230,6 @@ namespace GymManagement.Application.Services
                     {
                         var sessionDateTime = date.Date + schedule.TimeOfDay;
 
-                        // Check duplicate
                         if (!_gymClassRepository.Exists(schedule.GymClassScheduleId, sessionDateTime))
                         {
                             var newGymClass = new GymClass
@@ -274,14 +265,7 @@ namespace GymManagement.Application.Services
             return createdClasses;
         }
 
-        // -----------------------------------------------------------------------
-        // Helpers
-        // -----------------------------------------------------------------------
-
-        /// <summary>
-        /// Asserts that <paramref name="trainerId"/> belongs to an active, non-deleted Trainer.
-        /// Throws <see cref="NotFoundException"/> otherwise.
-        /// </summary>
+        /// <summary>Asserts <paramref name="trainerId"/> is an active, non-deleted Trainer.</summary>
         private Trainer AssertIsActiveTrainer(Guid trainerId)
         {
             var trainer = _trainerRepository.GetById(trainerId)
