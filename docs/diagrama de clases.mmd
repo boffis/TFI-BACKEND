@@ -61,8 +61,8 @@ erDiagram
         uniqueidentifier TrainerId FK "-> User.UserId"
         int DayOfWeek
         time TimeOfDay
-        bit IsWeekly
         bit IsActive
+        bit IsDeleted
     }
 
     INSCRIPTION {
@@ -78,6 +78,7 @@ erDiagram
         uniqueidentifier UserId FK "-> User.UserId"
         uniqueidentifier MembershipPlanId FK "-> MembershipPlan.MembershipPlanId"
         bit IsCancelled
+        bit AutoRenew
         datetime2 ExpirationDate
         nvarchar MpPreapprovalId
     }
@@ -87,6 +88,7 @@ erDiagram
         nvarchar Type
         decimal Price
         int DurationInDays
+        bit IsDeleted
     }
 
     PAYMENT {
