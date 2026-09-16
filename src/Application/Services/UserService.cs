@@ -95,7 +95,7 @@ namespace GymManagement.Application.Services
 
         public async Task<UserDetailedResponse?> GetDetailedByIdAsync(Guid id)
         {
-            var user = GetUserEntityById(id) ?? GetDeletedUserEntityById(id);
+            var user = GetUserEntityById(id);
             if (user == null) return null;
 
             var memberships = await _membershipRepository.GetByUserId(id);
