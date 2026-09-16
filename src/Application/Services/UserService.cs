@@ -232,6 +232,12 @@ namespace GymManagement.Application.Services
                 var activeMembership = await _membershipRepository.GetActiveByUserId(id);
                 if (activeMembership != null)
                     await _membershipBillingService.AdminCancelSubscriptionAsync(activeMembership.MembershipId);
+
+                // Nullify remaining (past) inscriptions to detach from the deleted account while
+                // keeping the attendance record — same as ChangeRoleAsync.
+                var remainingInscriptions = _inscriptionRepository.GetByClientId(id);
+                foreach (var inscription in remainingInscriptions)
+                    _inscriptionRepository.NullifyClientId(inscription.InscriptionId);
             }
 
             // Admins: the last remaining account can't be deleted.
